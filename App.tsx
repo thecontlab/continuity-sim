@@ -6,6 +6,7 @@ import { StageTeaser } from './components/StageTeaser';
 import { StageReport } from './components/StageReport';
 import { TerminalLoader } from './components/TerminalLoader';
 import { generateAuditReport } from './services/geminiService';
+import { submitLead } from './services/supabaseService';
 import { AppState, AuditStage, FoundationData, RiskInput, IdentityData } from './types';
 
 function App() {
@@ -43,12 +44,24 @@ function App() {
     }
   };
 
-  const handleIdentityUnlock = (identity: IdentityData) => {
-    setState(prev => ({ 
-      ...prev, 
+  const handleIdentityUnlock = async (identity: IdentityData) => {
+    // 1. Update State locally first so UI feels responsive
+    const newState = { 
+      ...state, 
       identity, 
       stage: AuditStage.FULL_REPORT 
-    }));
+    };
+    setState(newState);
+
+    // 2. Submit to Supabase in background
+    try {
+      await submitLead(newState);
+      console.log("Lead secured in database.");
+    } catch (dbError) {
+      // We do not block the user from seeing the report if DB fails, 
+      // but we log it for the admin.
+      console.error("Failed to save lead:", dbError);
+    }
   };
 
   return (

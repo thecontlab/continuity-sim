@@ -59,9 +59,10 @@ export const generateAuditReport = async (
   riskInputs: RiskInput[]
 ): Promise<GeminiAuditResponse> => {
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("API Key is missing");
-  }
+
+if (!apiKey) {
+  throw new Error("API Key is missing");
+}
 
   const ai = new GoogleGenAI({ apiKey });
 

@@ -86,7 +86,7 @@ export const generateAuditReport = async (
 ): Promise<GeminiAuditResponse> => {
   // Use a fallback empty string to ensure the variable is treated as a string type
   // This prevents runtime crashes if process.env.API_KEY is undefined
-  const apiKey = process.env.API_KEY || "";
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   // Strict check: If apiKey is empty, return Mock Data immediately.
   // This avoids passing an empty string to GoogleGenAI which would throw an error.

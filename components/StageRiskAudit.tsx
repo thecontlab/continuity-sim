@@ -29,18 +29,23 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
   // Tooltip State
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
+  // --- DIAGNOSTIC LOGIC ---
   const activeScenarioGroup = INDUSTRY_RbBS[industry] || INDUSTRY_RbBS['default'];
   const currentCategory = CATEGORIES[currentIndex];
-  const scenario = activeScenarioGroup[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
+  // Safe access to the scenario
+  const scenario = activeScenarioGroup?.[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
+
+  // Debugging Check
+  const isGeneric = activeScenarioGroup === INDUSTRY_RbBS['default'] && industry !== 'default';
 
   useEffect(() => {
     setAnswer1(null);
     setAnswer2(null);
     setIsCustomInput(false);
     setSelectedTags([]);
-    setActiveTooltip(null); // Reset tooltip
+    setActiveTooltip(null); 
     
-    if (scenario.q1.type === 'slider') setAnswer1(50);
+    if (scenario?.q1?.type === 'slider') setAnswer1(50);
   }, [currentIndex, industry]);
 
   const handleNext = () => {
@@ -71,7 +76,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     }
   };
 
-  // Helper component for the (?) button
   const TooltipButton = ({ text }: { text?: string }) => {
     if (!text) return null;
     return (
@@ -84,7 +88,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     );
   };
 
-  // Helper to render the active tooltip text box
   const TooltipDisplay = () => {
     if (!activeTooltip) return null;
     return (
@@ -150,7 +153,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
           <TooltipButton text={q2.tooltip} />
         </div>
         
-        {/* Suggestion Chips */}
         <div className="flex flex-wrap gap-3 mb-4">
            {q2.options?.map((opt: string) => (
              <button
@@ -215,6 +217,24 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
   return (
     <div className="max-w-3xl mx-auto pt-8 pb-20">
+      
+      {/* --- DIAGNOSTIC BANNER START --- */}
+      <div className="bg-[#450A0A] border border-[#DC2626] p-2 mb-4 text-[10px] font-mono text-white flex justify-between items-center">
+        <div>
+          <span className="text-[#9CA3AF] mr-2">DETECTED INDUSTRY:</span>
+          <span className="font-bold">"{industry}"</span>
+        </div>
+        <div>
+          <span className="text-[#9CA3AF] mr-2">STATUS:</span>
+          {isGeneric ? (
+            <span className="text-red-400 font-bold">FALLBACK TO GENERIC (Mismatch)</span>
+          ) : (
+            <span className="text-green-400 font-bold">MATCHED CUSTOM SCENARIO</span>
+          )}
+        </div>
+      </div>
+      {/* --- DIAGNOSTIC BANNER END --- */}
+
       <ProgressBar current={currentIndex + 1} total={CATEGORIES.length} />
 
       <div className="bg-[#161B22] border border-[#374151] p-1 shadow-2xl">
@@ -240,12 +260,12 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
             </div>
           </div>
           <div className="text-[#E8830C] font-mono text-xs">
-            {industry === 'Construction & Real Estate' ? 'IND: CONST' : 'IND: GENERIC'}
+            IND: {industry.substring(0, 10).toUpperCase()}
           </div>
         </div>
 
         <div className="p-8 min-h-[300px]">
-          <TooltipDisplay /> {/* Renders the tooltip content if active */}
+          <TooltipDisplay />
           
           <div className="mb-6">
             <div className="flex items-center mb-2">

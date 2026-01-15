@@ -21,20 +21,19 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
   const [currentIndex, setCurrentIndex] = useState(0);
   const [inputs, setInputs] = useState<RiskInput[]>([]);
   
-  // Local answers for the current card
   const [answer1, setAnswer1] = useState<any>(null);
-  const [answer2, setAnswer2] = useState<any>(null);
+  const [answer2, setAnswer2] = useState<any>(null); // This will hold the final string (suggestion or custom)
+  const [isCustomInput, setIsCustomInput] = useState(false); // UI toggle
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  // Resolve Scenario
   const activeScenarioGroup = INDUSTRY_RbBS[industry] || INDUSTRY_RbBS['default'];
   const currentCategory = CATEGORIES[currentIndex];
   const scenario = activeScenarioGroup[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
 
-  // Reset local state when category changes
   useEffect(() => {
     setAnswer1(null);
     setAnswer2(null);
+    setIsCustomInput(false);
     setSelectedTags([]);
     
     if (scenario.q1.type === 'slider') setAnswer1(50);
@@ -43,11 +42,21 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
   const handleNext = () => {
     const { severity, latency } = scenario.calculateScore(answer1, answer2);
     
+    // Determine the label for metadata
+    const q2Config = scenario.q2(answer1);
+    
     const newInput: RiskInput = {
       category: currentCategory,
       severity: severity,
       latency: latency, 
-      skipped: false
+      skipped: false,
+      metadata: {
+        question1_label: scenario.q1.label,
+        answer1_value: answer1,
+        question2_label: q2Config ? q2Config.label : 'N/A',
+        answer2_value: answer2,
+        selected_tags: selectedTags
+      }
     };
 
     const newInputs = [...inputs, newInput];
@@ -60,11 +69,8 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     }
   };
 
-  // --- RENDER HELPERS ---
-
   const renderQ1Input = () => {
     const { q1 } = scenario;
-    
     if (q1.type === 'slider') {
       return (
         <div className="py-4">
@@ -83,7 +89,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
         </div>
       );
     }
-
     if (q1.type === 'picker') {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -113,44 +118,55 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     return (
       <div className="mt-8 animate-fade-in border-t border-[#374151] pt-6">
         <label className="block text-sm font-bold text-white mb-4">
-          {/* REMOVED: Step 02 label */}
           {q2.label}
         </label>
         
-        {q2.type === 'binary' && (
-          <div className="flex gap-4">
-             {q2.options?.map((opt: string) => (
-               <button
-                key={opt}
-                onClick={() => setAnswer2(opt)}
-                className={`flex-1 py-3 px-6 text-sm font-bold uppercase tracking-wider border transition-all ${
-                  answer2 === opt
-                    ? 'bg-white text-black border-white'
-                    : 'bg-transparent text-[#9CA3AF] border-[#374151] hover:border-white'
-                }`}
-               >
-                 {opt}
-               </button>
-             ))}
+        {/* Suggestion Chips */}
+        <div className="flex flex-wrap gap-3 mb-4">
+           {q2.options?.map((opt: string) => (
+             <button
+              key={opt}
+              onClick={() => {
+                setAnswer2(opt);
+                setIsCustomInput(false);
+              }}
+              className={`py-2 px-4 text-xs font-mono border rounded-full transition-all ${
+                answer2 === opt && !isCustomInput
+                  ? 'bg-[#E8830C] border-[#E8830C] text-white'
+                  : 'bg-[#1F2937] border-[#374151] text-[#9CA3AF] hover:border-white'
+              }`}
+             >
+               {opt}
+             </button>
+           ))}
+           
+           <button
+             onClick={() => {
+               setAnswer2(''); // Clear value to force typing
+               setIsCustomInput(true);
+             }}
+             className={`py-2 px-4 text-xs font-mono border rounded-full transition-all ${
+                isCustomInput
+                  ? 'bg-white border-white text-black'
+                  : 'bg-transparent border-[#374151] text-[#6B7280] hover:text-white'
+             }`}
+           >
+             Other / Custom...
+           </button>
+        </div>
+
+        {/* Custom Input Field (Mad Libs Style) */}
+        {isCustomInput && (
+          <div className="animate-fade-in">
+            <input 
+              type="text"
+              autoFocus
+              placeholder="Describe your specific situation..."
+              value={answer2} // This allows editing the "Other" value
+              onChange={(e) => setAnswer2(e.target.value)}
+              className="w-full bg-[#0B0E14] border-b-2 border-[#E8830C] text-white p-3 focus:outline-none font-mono text-sm"
+            />
           </div>
-        )}
-        
-        {q2.type === 'picker' && (
-           <div className="grid grid-cols-1 gap-2">
-             {q2.options?.map((opt: string) => (
-               <button
-                 key={opt}
-                 onClick={() => setAnswer2(opt)}
-                 className={`text-left px-4 py-3 text-sm border ${
-                   answer2 === opt 
-                     ? 'bg-[#1F2937] border-white text-white' 
-                     : 'border-[#374151] text-[#9CA3AF] hover:bg-[#1F2937]'
-                 }`}
-               >
-                 {opt}
-               </button>
-             ))}
-           </div>
         )}
       </div>
     );
@@ -166,7 +182,8 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
   const q2Config = scenario.q2(answer1);
   const isQ1Answered = answer1 !== null;
-  const isQ2Answered = !q2Config || answer2 !== null;
+  // Valid if Q2 doesn't exist OR if answer2 has content (string length > 0)
+  const isQ2Answered = !q2Config || (answer2 !== null && answer2 !== ''); 
   const canProceed = isQ1Answered && isQ2Answered;
 
   return (
@@ -174,7 +191,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
       <ProgressBar current={currentIndex + 1} total={CATEGORIES.length} />
 
       <div className="bg-[#161B22] border border-[#374151] p-1 shadow-2xl">
-        {/* Dynamic Header */}
         <div className="bg-[#0B0E14] p-6 border-b border-[#374151] flex justify-between items-start">
           <div>
             <h2 className="text-xl font-bold text-white uppercase tracking-tight">
@@ -201,12 +217,9 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
           </div>
         </div>
 
-        {/* Interaction Zone */}
         <div className="p-8 min-h-[300px]">
-          {/* Question 1 */}
           <div className="mb-6">
             <label className="block text-sm font-bold text-white mb-2">
-              {/* REMOVED: Step 01 label */}
               {scenario.q1.label}
             </label>
             {scenario.q1.helperText && (
@@ -215,13 +228,10 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
             {renderQ1Input()}
           </div>
 
-          {/* Question 2 (Reactive) */}
           {answer1 !== null && renderQ2Input()}
         </div>
 
-        {/* Footer Actions */}
         <div className="p-4 bg-[#0B0E14] border-t border-[#374151] flex justify-end gap-4">
-           {/* Skip Button */}
            <button 
              onClick={() => {
                 const skipInput = { category: currentCategory, severity: 7, latency: 7, skipped: true };

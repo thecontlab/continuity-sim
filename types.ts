@@ -20,6 +20,14 @@ export interface RiskInput {
   severity: number; // 1-10
   latency: number; // 1-10
   skipped: boolean;
+  // NEW: Rich Context for the AI
+  metadata?: {
+    question1_label: string;
+    answer1_value: string | number;
+    question2_label: string;
+    answer2_value: string | number;
+    selected_tags: string[];
+  };
 }
 
 export interface FoundationData {

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { RiskInput, RiskCategory } from '../types';
 import { ProgressBar } from './ProgressBar';
-// FIX 1: Import directly from the scenarios file, not the index
 import { INDUSTRY_RbBS } from '../constants/scenarios'; 
 
 interface StageRiskAuditProps {
@@ -28,10 +27,8 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   // Resolve Scenario
-  // If the specific industry doesn't exist in config, fall back to 'default'
   const activeScenarioGroup = INDUSTRY_RbBS[industry] || INDUSTRY_RbBS['default'];
   const currentCategory = CATEGORIES[currentIndex];
-  // Safety check: ensure the category exists in the scenario group, else fallback to default's category
   const scenario = activeScenarioGroup[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
 
   // Reset local state when category changes
@@ -40,15 +37,12 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     setAnswer2(null);
     setSelectedTags([]);
     
-    // Default initial value for sliders to middle
     if (scenario.q1.type === 'slider') setAnswer1(50);
   }, [currentIndex, industry]);
 
   const handleNext = () => {
-    // 1. Calculate Score based on specific scenario logic
     const { severity, latency } = scenario.calculateScore(answer1, answer2);
     
-    // 2. Save Input
     const newInput: RiskInput = {
       category: currentCategory,
       severity: severity,
@@ -59,7 +53,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     const newInputs = [...inputs, newInput];
     setInputs(newInputs);
 
-    // 3. Advance or Complete
     if (currentIndex < CATEGORIES.length - 1) {
       setCurrentIndex(prev => prev + 1);
     } else {
@@ -84,8 +77,8 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
             className="w-full h-2 bg-[#1F2937] rounded-lg appearance-none cursor-pointer accent-[#E8830C]"
           />
           <div className="flex justify-between mt-2 text-xs font-mono text-[#9CA3AF]">
-            <span>Low Impact</span>
-            <span>Critical</span>
+            <span>{q1.minLabel || 'Low Impact'}</span>
+            <span>{q1.maxLabel || 'Critical'}</span>
           </div>
         </div>
       );
@@ -94,7 +87,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     if (q1.type === 'picker') {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {q1.options?.map((opt: string) => ( // FIX 2: Added type definition
+          {q1.options?.map((opt: string) => (
             <button
               key={opt}
               onClick={() => setAnswer1(opt)}
@@ -114,21 +107,19 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
   };
 
   const renderQ2Input = () => {
-    // Determine Q2 dynamically based on Answer 1
     const q2 = scenario.q2(answer1);
-    
-    if (!q2) return null; // No Q2 for this path
+    if (!q2) return null;
 
     return (
       <div className="mt-8 animate-fade-in border-t border-[#374151] pt-6">
         <label className="block text-sm font-bold text-white mb-4">
-          <span className="text-[#E8830C] mr-2">Step 02:</span> 
+          {/* REMOVED: Step 02 label */}
           {q2.label}
         </label>
         
         {q2.type === 'binary' && (
           <div className="flex gap-4">
-             {q2.options?.map((opt: string) => ( // FIX 2: Added type definition
+             {q2.options?.map((opt: string) => (
                <button
                 key={opt}
                 onClick={() => setAnswer2(opt)}
@@ -146,7 +137,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
         
         {q2.type === 'picker' && (
            <div className="grid grid-cols-1 gap-2">
-             {q2.options?.map((opt: string) => ( // FIX 2: Added type definition
+             {q2.options?.map((opt: string) => (
                <button
                  key={opt}
                  onClick={() => setAnswer2(opt)}
@@ -173,10 +164,9 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     }
   };
 
-  // Determine if "Next" is enabled
   const q2Config = scenario.q2(answer1);
   const isQ1Answered = answer1 !== null;
-  const isQ2Answered = !q2Config || answer2 !== null; // valid if Q2 doesn't exist OR if it is answered
+  const isQ2Answered = !q2Config || answer2 !== null;
   const canProceed = isQ1Answered && isQ2Answered;
 
   return (
@@ -191,7 +181,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
               {currentCategory}
             </h2>
             <div className="flex flex-wrap gap-2 mt-3">
-              {scenario.contextTags.map((tag: string) => ( // FIX 2: Added type definition
+              {scenario.contextTags.map((tag: string) => (
                 <button
                   key={tag}
                   onClick={() => toggleTag(tag)}
@@ -216,7 +206,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
           {/* Question 1 */}
           <div className="mb-6">
             <label className="block text-sm font-bold text-white mb-2">
-              <span className="text-[#E8830C] mr-2">Step 01:</span> 
+              {/* REMOVED: Step 01 label */}
               {scenario.q1.label}
             </label>
             {scenario.q1.helperText && (
@@ -231,10 +221,9 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
         {/* Footer Actions */}
         <div className="p-4 bg-[#0B0E14] border-t border-[#374151] flex justify-end gap-4">
-           {/* Skip Button (assigns default high risk) */}
+           {/* Skip Button */}
            <button 
              onClick={() => {
-                // Manual skip logic
                 const skipInput = { category: currentCategory, severity: 7, latency: 7, skipped: true };
                 setInputs([...inputs, skipInput]);
                 if (currentIndex < CATEGORIES.length - 1) setCurrentIndex(p => p + 1);
@@ -242,7 +231,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
              }}
              className="text-xs font-mono text-[#6B7280] hover:text-white px-4"
            >
-             SKIP_NODE
+             SKIP
            </button>
 
            <Button 
@@ -250,7 +239,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
              disabled={!canProceed}
              className={!canProceed ? 'opacity-50 cursor-not-allowed' : ''}
            >
-             CONFIRM INTEL &rarr;
+             NEXT &rarr;
            </Button>
         </div>
       </div>

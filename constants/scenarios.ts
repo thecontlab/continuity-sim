@@ -6,12 +6,15 @@ export interface ScenarioQuestion {
   label: string;
   options?: string[]; // For picker/binary
   helperText?: string;
+  // NEW: Dynamic labels for slider endpoints
+  minLabel?: string; 
+  maxLabel?: string;
 }
 
 export interface IndustryScenario {
-  contextTags: string[]; // "Select risks relevant to you"
+  contextTags: string[]; 
   q1: ScenarioQuestion;
-  q2: (answer1: any) => ScenarioQuestion | null; // Dynamic Q2 based on Q1
+  q2: (answer1: any) => ScenarioQuestion | null;
   calculateScore: (a1: any, a2: any) => { severity: number, latency: number };
 }
 
@@ -25,11 +28,13 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
     [RiskCategory.SUPPLY_CHAIN]: {
       contextTags: ['Lumber Shortage', 'Steel Tariffs', 'Vendor Insolvency', 'Shipping Delays'],
       q1: {
-        id: 'material_volatility',
+        id: 'supply_resilience',
         type: 'slider',
-        label: 'Material Lead Time Volatility',
-        helperText: 'How unpredictable are delivery dates for critical path materials?',
-        // Slider represents 0% (Stable) to 100% (Chaos)
+        label: 'Supply Chain Diversification',
+        helperText: 'How dependent are you on a single provider for critical materials?',
+        // Slider: 0 = Bad (Single), 100 = Good (Dynamic)
+        minLabel: 'Single Source (Critical)',
+        maxLabel: 'Dynamic / Multi-Vendor',
       },
       q2: (a1) => ({
         id: 'inventory_buffer',
@@ -37,15 +42,17 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
         label: 'On-Site Inventory Buffer',
         options: ['< 3 Days (JIT)', '1-2 Weeks', '> 1 Month']
       }),
-      calculateScore: (volatility, buffer) => {
-        // High volatility + Low buffer = Max Risk
-        let base = normalize(volatility); 
-        if (buffer === '< 3 Days (JIT)') base += 3;
-        if (buffer === '> 1 Month') base -= 2;
-        // Clamp between 1 and 10
+      calculateScore: (resilience, buffer) => {
+        // INVERTED LOGIC: High Resilience (100) = Low Risk (0)
+        // We use (100 - resilience) to get the risk factor
+        let riskFactor = normalize(100 - resilience); 
+        
+        if (buffer === '< 3 Days (JIT)') riskFactor += 3;
+        if (buffer === '> 1 Month') riskFactor -= 2;
+
         return { 
-          severity: Math.min(10, Math.max(1, base)), 
-          latency: base > 7 ? 8 : 4 
+          severity: Math.min(10, Math.max(1, riskFactor)), 
+          latency: riskFactor > 7 ? 8 : 4 
         };
       }
     },
@@ -56,6 +63,8 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
         type: 'slider',
         label: 'Reliance on Subcontractors',
         helperText: 'Percentage of critical path work outsourced vs. self-performed.',
+        minLabel: '100% Self-Performed',
+        maxLabel: '100% Outsourced'
       },
       q2: () => ({
         id: 'sub_backup',
@@ -64,15 +73,16 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
         options: ['Yes, Pre-Vetted', 'No, Search Required']
       }),
       calculateScore: (reliance, backup) => {
+        // High Reliance (100) = High Risk
         let score = normalize(reliance);
-        if (backup === 'No, Search Required') score += 2; // Higher latency risk
+        if (backup === 'No, Search Required') score += 2; 
         return { 
           severity: Math.min(10, Math.max(1, score)), 
           latency: backup === 'No, Search Required' ? 9 : 3 
         };
       }
     },
-    // Fallbacks for other categories in Construction
+    // Fallbacks
     [RiskCategory.CASH_FLOW]: {
        contextTags: ['Project Delays', 'Retainage', 'Draw Schedules'],
        q1: { id: 'draw_delay', type: 'picker', label: 'Avg Draw Payment Delay', options: ['< 30 Days', '30-60 Days', '60+ Days'] },
@@ -84,7 +94,14 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
     },
     [RiskCategory.WEATHER_PHYSICAL]: {
        contextTags: ['Site Access', 'Equipment Damage', 'Storms'],
-       q1: { id: 'outdoor_ops', type: 'slider', label: '% of Ops Dependent on Weather', helperText: '0% = Indoor, 100% = Outdoor' },
+       q1: { 
+         id: 'outdoor_ops', 
+         type: 'slider', 
+         label: '% of Ops Dependent on Weather', 
+         helperText: 'How much of your production stops during severe weather?',
+         minLabel: '0% (Indoor/Protected)',
+         maxLabel: '100% (Fully Exposed)'
+       },
        q2: () => null,
        calculateScore: (val) => ({ severity: normalize(val), latency: 6 })
     },
@@ -121,12 +138,18 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
         return { severity: sev, latency: lat };
       }
     },
-    // Fallbacks for Healthcare
     [RiskCategory.SUPPLY_CHAIN]: {
       contextTags: ['PPE Shortage', 'Device Components', 'Pharma Logistics'],
-      q1: { id: 'single_source', type: 'slider', label: 'Single Source Dependency', helperText: 'Exposure to one critical vendor' },
+      q1: { 
+        id: 'single_source', 
+        type: 'slider', 
+        label: 'Supplier Redundancy', 
+        helperText: 'Do you have qualified backups for critical medical supplies?',
+        minLabel: 'Single Source (Critical)',
+        maxLabel: 'Multi-Vendor (Safe)'
+      },
       q2: () => null,
-      calculateScore: (val) => ({ severity: normalize(val), latency: 5 })
+      calculateScore: (val) => ({ severity: normalize(100 - val), latency: 5 })
     },
     [RiskCategory.CASH_FLOW]: {
       contextTags: ['Insurance Reimbursement', 'Billing Cycles'],
@@ -136,7 +159,14 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
     },
     [RiskCategory.WORKFORCE]: {
       contextTags: ['Burnout', 'Specialized Surgeons', 'Nurses'],
-      q1: { id: 'turnover', type: 'slider', label: 'Clinical Staff Turnover', helperText: '0% = Low, 100% = High' },
+      q1: { 
+        id: 'turnover', 
+        type: 'slider', 
+        label: 'Clinical Staff Turnover', 
+        helperText: 'Annual rate of attrition for key clinical roles.',
+        minLabel: 'Low (< 5%)',
+        maxLabel: 'High (> 20%)'
+      },
       q2: () => null,
       calculateScore: (val) => ({ severity: normalize(val), latency: 7 })
     },
@@ -152,10 +182,18 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
   'default': {
     [RiskCategory.SUPPLY_CHAIN]: {
       contextTags: ['Single Source', 'Logistics', 'Quality Fade'],
-      q1: { id: 'generic_supply', type: 'slider', label: 'Supplier Concentration Risk', helperText: '0% = Diversified, 100% = Single Source' },
+      q1: { 
+        id: 'generic_supply', 
+        type: 'slider', 
+        label: 'Supplier Concentration', 
+        helperText: 'Level of dependency on your top 3 vendors.',
+        minLabel: 'Single Source (Risky)',
+        maxLabel: 'Distributed (Safe)'
+      },
       q2: () => ({ id: 'generic_recovery', type: 'binary', label: 'Backup Plan Tested?', options: ['Yes', 'No'] }),
       calculateScore: (conc, tested) => ({ 
-        severity: normalize(conc), 
+        // Inverted: 0 (Single) is bad, 100 (Distributed) is good
+        severity: normalize(100 - conc), 
         latency: tested === 'No' ? 8 : 4 
       })
     },
@@ -167,19 +205,40 @@ export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario
     },
     [RiskCategory.WEATHER_PHYSICAL]: {
        contextTags: ['Flood', 'Power Outage', 'Access'],
-       q1: { id: 'location', type: 'slider', label: 'Physical Vulnerability', helperText: 'Exposure to natural disasters' },
+       q1: { 
+         id: 'location', 
+         type: 'slider', 
+         label: 'Physical Vulnerability', 
+         helperText: 'Exposure to natural disasters based on HQ location.',
+         minLabel: 'Safe Zone',
+         maxLabel: 'High Risk Zone'
+       },
        q2: () => null,
        calculateScore: (val) => ({ severity: normalize(val), latency: 5 })
     },
     [RiskCategory.INFRASTRUCTURE_TOOLS]: {
         contextTags: ['SaaS Outage', 'Data Loss'],
-        q1: { id: 'dependency', type: 'slider', label: 'Platform Dependency', helperText: 'Reliance on proprietary tools' },
+        q1: { 
+          id: 'dependency', 
+          type: 'slider', 
+          label: 'Platform Dependency', 
+          helperText: 'Reliance on proprietary tools / Walled Gardens.',
+          minLabel: 'Open Standard',
+          maxLabel: 'Vendor Locked'
+        },
         q2: () => null,
         calculateScore: (val) => ({ severity: normalize(val), latency: 5 })
     },
     [RiskCategory.WORKFORCE]: {
         contextTags: ['Key Person Risk', 'Burnout'],
-        q1: { id: 'bus_factor', type: 'slider', label: 'Key Person Dependency', helperText: 'If 1 person leaves, does the business stop?' },
+        q1: { 
+          id: 'bus_factor', 
+          type: 'slider', 
+          label: 'Key Person Dependency', 
+          helperText: 'If 1 person leaves, does the business stop?',
+          minLabel: 'Redundant Teams',
+          maxLabel: 'Single Points of Failure'
+        },
         q2: () => null,
         calculateScore: (val) => ({ severity: normalize(val), latency: 5 })
     }

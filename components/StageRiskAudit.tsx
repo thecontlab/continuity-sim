@@ -1,248 +1,257 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from './Button';
 import { RiskInput, RiskCategory } from '../types';
-import { RISK_CARDS } from '../constants';
 import { ProgressBar } from './ProgressBar';
+// FIX 1: Import directly from the scenarios file, not the index
+import { INDUSTRY_RbBS } from '../constants/scenarios'; 
 
 interface StageRiskAuditProps {
+  industry: string;
   onComplete: (inputs: RiskInput[]) => void;
 }
 
-export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ onComplete }) => {
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+const CATEGORIES = [
+  RiskCategory.SUPPLY_CHAIN,
+  RiskCategory.CASH_FLOW,
+  RiskCategory.WORKFORCE,
+  RiskCategory.INFRASTRUCTURE_TOOLS,
+  RiskCategory.WEATHER_PHYSICAL
+];
+
+export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComplete }) => {
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [inputs, setInputs] = useState<RiskInput[]>([]);
   
-  // Slider states for current card
-  const [severity, setSeverity] = useState(5);
-  const [latency, setLatency] = useState(5);
+  // Local answers for the current card
+  const [answer1, setAnswer1] = useState<any>(null);
+  const [answer2, setAnswer2] = useState<any>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
-  // State for pop-over details
-  const [activeDetail, setActiveDetail] = useState<string | null>(null);
+  // Resolve Scenario
+  // If the specific industry doesn't exist in config, fall back to 'default'
+  const activeScenarioGroup = INDUSTRY_RbBS[industry] || INDUSTRY_RbBS['default'];
+  const currentCategory = CATEGORIES[currentIndex];
+  // Safety check: ensure the category exists in the scenario group, else fallback to default's category
+  const scenario = activeScenarioGroup[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
 
-  const currentCard = RISK_CARDS[currentCardIndex];
+  // Reset local state when category changes
+  useEffect(() => {
+    setAnswer1(null);
+    setAnswer2(null);
+    setSelectedTags([]);
+    
+    // Default initial value for sliders to middle
+    if (scenario.q1.type === 'slider') setAnswer1(50);
+  }, [currentIndex, industry]);
 
-  // Logic 1: Card Border Styling
-  const isHighRisk = severity > 7 || latency > 7;
-  const cardBorderColor = isHighRisk ? 'border-[#E8830C]' : 'border-[#374151]';
-  const shadowColor = isHighRisk ? 'shadow-[0_0_15px_rgba(232,131,12,0.15)]' : 'shadow-2xl';
-
-  // Logic 2: Reactive Slider Labels
-  const getRiskMeta = (value: number) => {
-    if (value <= 3) return { label: "OPTIMIZED (Low Latency)", color: "text-emerald-400" };
-    if (value <= 7) return { label: "STRAINED (Moderate Latency)", color: "text-yellow-500" };
-    return { label: "CRITICAL (High Latency)", color: "text-red-500" };
-  };
-
-  const severityMeta = getRiskMeta(severity);
-  const latencyMeta = getRiskMeta(latency);
-
-  const handleNext = (skipped: boolean) => {
+  const handleNext = () => {
+    // 1. Calculate Score based on specific scenario logic
+    const { severity, latency } = scenario.calculateScore(answer1, answer2);
+    
+    // 2. Save Input
     const newInput: RiskInput = {
-      category: currentCard.id,
-      severity: skipped ? 7 : severity, // Shadow score logic
-      latency: skipped ? 7 : latency,   // Shadow score logic
-      skipped
+      category: currentCategory,
+      severity: severity,
+      latency: latency, 
+      skipped: false
     };
 
     const newInputs = [...inputs, newInput];
     setInputs(newInputs);
-    setActiveDetail(null); // Close any open details
 
-    // Reset sliders for next card
-    setSeverity(5);
-    setLatency(5);
-
-    if (currentCardIndex < RISK_CARDS.length - 1) {
-      setCurrentCardIndex(prev => prev + 1);
+    // 3. Advance or Complete
+    if (currentIndex < CATEGORIES.length - 1) {
+      setCurrentIndex(prev => prev + 1);
     } else {
       onComplete(newInputs);
     }
   };
 
-  const toggleDetail = (id: string) => {
-    if (activeDetail === id) {
-      setActiveDetail(null);
+  // --- RENDER HELPERS ---
+
+  const renderQ1Input = () => {
+    const { q1 } = scenario;
+    
+    if (q1.type === 'slider') {
+      return (
+        <div className="py-4">
+           <input
+            type="range"
+            min="0"
+            max="100"
+            value={answer1 || 50}
+            onChange={(e) => setAnswer1(parseInt(e.target.value))}
+            className="w-full h-2 bg-[#1F2937] rounded-lg appearance-none cursor-pointer accent-[#E8830C]"
+          />
+          <div className="flex justify-between mt-2 text-xs font-mono text-[#9CA3AF]">
+            <span>Low Impact</span>
+            <span>Critical</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (q1.type === 'picker') {
+      return (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {q1.options?.map((opt: string) => ( // FIX 2: Added type definition
+            <button
+              key={opt}
+              onClick={() => setAnswer1(opt)}
+              className={`p-4 text-sm font-mono border transition-all ${
+                answer1 === opt 
+                  ? 'bg-[#E8830C] border-[#E8830C] text-white' 
+                  : 'bg-[#0B0E14] border-[#374151] text-[#9CA3AF] hover:border-[#E8830C]'
+              }`}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const renderQ2Input = () => {
+    // Determine Q2 dynamically based on Answer 1
+    const q2 = scenario.q2(answer1);
+    
+    if (!q2) return null; // No Q2 for this path
+
+    return (
+      <div className="mt-8 animate-fade-in border-t border-[#374151] pt-6">
+        <label className="block text-sm font-bold text-white mb-4">
+          <span className="text-[#E8830C] mr-2">Step 02:</span> 
+          {q2.label}
+        </label>
+        
+        {q2.type === 'binary' && (
+          <div className="flex gap-4">
+             {q2.options?.map((opt: string) => ( // FIX 2: Added type definition
+               <button
+                key={opt}
+                onClick={() => setAnswer2(opt)}
+                className={`flex-1 py-3 px-6 text-sm font-bold uppercase tracking-wider border transition-all ${
+                  answer2 === opt
+                    ? 'bg-white text-black border-white'
+                    : 'bg-transparent text-[#9CA3AF] border-[#374151] hover:border-white'
+                }`}
+               >
+                 {opt}
+               </button>
+             ))}
+          </div>
+        )}
+        
+        {q2.type === 'picker' && (
+           <div className="grid grid-cols-1 gap-2">
+             {q2.options?.map((opt: string) => ( // FIX 2: Added type definition
+               <button
+                 key={opt}
+                 onClick={() => setAnswer2(opt)}
+                 className={`text-left px-4 py-3 text-sm border ${
+                   answer2 === opt 
+                     ? 'bg-[#1F2937] border-white text-white' 
+                     : 'border-[#374151] text-[#9CA3AF] hover:bg-[#1F2937]'
+                 }`}
+               >
+                 {opt}
+               </button>
+             ))}
+           </div>
+        )}
+      </div>
+    );
+  };
+
+  const toggleTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(prev => prev.filter(t => t !== tag));
     } else {
-      setActiveDetail(id);
+      setSelectedTags(prev => [...prev, tag]);
     }
   };
 
+  // Determine if "Next" is enabled
+  const q2Config = scenario.q2(answer1);
+  const isQ1Answered = answer1 !== null;
+  const isQ2Answered = !q2Config || answer2 !== null; // valid if Q2 doesn't exist OR if it is answered
+  const canProceed = isQ1Answered && isQ2Answered;
+
   return (
-    <div className="max-w-4xl mx-auto pt-4">
-      <ProgressBar current={currentCardIndex + 1} total={RISK_CARDS.length} />
-      
-      <div className="flex justify-between items-end mb-4">
-        <span className="text-[#E8830C] font-mono text-xs tracking-widest">
-          NODE {currentCardIndex + 1} / {RISK_CARDS.length}
-        </span>
-        <Button variant="outline" onClick={() => handleNext(true)} className="text-xs py-2 px-3 border-dashed">
-          SKIP_NODE
-        </Button>
-      </div>
+    <div className="max-w-3xl mx-auto pt-8 pb-20">
+      <ProgressBar current={currentIndex + 1} total={CATEGORIES.length} />
 
-      <div className={`bg-[#161B22] border-2 transition-colors duration-500 ease-in-out ${cardBorderColor} ${shadowColor} overflow-hidden`}>
-        
-        {/* Rich Media Header */}
-        <div className="relative h-32 w-full overflow-hidden border-b border-[#374151]">
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0E14] via-[#0B0E14]/70 to-transparent z-10" />
-          <img 
-            src={currentCard.imageUrl} 
-            alt={currentCard.title} 
-            className="w-full h-full object-cover grayscale opacity-80"
-          />
-          <div className="absolute bottom-0 left-0 p-6 z-20">
-            <h2 className="text-2xl font-bold text-white uppercase tracking-tight leading-none">
-              {currentCard.title}
-            </h2>
-            <p className="text-[#9CA3AF] text-[10px] font-mono mt-1 hidden sm:block">
-              {currentCard.description}
-            </p>
-          </div>
-        </div>
-
-        <div className="p-8 space-y-8">
-          
-          {/* Audit Context Block */}
+      <div className="bg-[#161B22] border border-[#374151] p-1 shadow-2xl">
+        {/* Dynamic Header */}
+        <div className="bg-[#0B0E14] p-6 border-b border-[#374151] flex justify-between items-start">
           <div>
-             <div className="font-mono text-[10px] text-gray-500 uppercase mb-2 tracking-wider">
-               AUDIT PROTOCOL:
-             </div>
-             <p className="text-xs text-gray-400 font-sans italic pl-3 border-l-2 border-[#E8830C] leading-relaxed">
-               "{currentCard.context}"
-             </p>
-          </div>
-
-          {/* Slider 1: Severity Proxy */}
-          <div className="group relative">
-            <div className="mb-4">
-              <div className="flex justify-between items-start mb-2">
-                <label className="text-sm font-bold text-[#E8830C] uppercase tracking-wide font-mono flex-1">
-                  Input 01: {currentCard.q1}
-                </label>
-                <div className="flex items-center gap-3">
-                  <span className={`font-mono text-xs font-bold ${severityMeta.color} animate-pulse hidden sm:inline-block`}>
-                    {severityMeta.label}
-                  </span>
-                  <span className="font-mono text-white text-xl font-bold bg-[#0B0E14] px-3 py-1 border border-[#374151]">
-                    {severity}
-                  </span>
-                </div>
-              </div>
-
-              {/* Question Paragraph + Pop-out Trigger */}
-              <div className="flex items-start gap-2">
-                <p className="text-sm text-white leading-relaxed font-semibold">
-                  {currentCard.q1Question}
-                </p>
-                <button 
-                  onClick={() => toggleDetail('q1')}
-                  className="text-[#9CA3AF] hover:text-[#E8830C] transition-colors focus:outline-none"
-                  aria-label="More details"
+            <h2 className="text-xl font-bold text-white uppercase tracking-tight">
+              {currentCategory}
+            </h2>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {scenario.contextTags.map((tag: string) => ( // FIX 2: Added type definition
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className={`text-[10px] font-mono uppercase px-2 py-1 border transition-colors ${
+                    selectedTags.includes(tag)
+                      ? 'bg-[#E8830C]/20 border-[#E8830C] text-[#E8830C]'
+                      : 'border-[#374151] text-[#6B7280] hover:border-[#9CA3AF]'
+                  }`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
+                  {selectedTags.includes(tag) ? '[x] ' : '[ ] '} {tag}
                 </button>
-              </div>
-
-              {/* Pop-out Detail */}
-              {activeDetail === 'q1' && (
-                <div className="mt-3 p-3 bg-[#0B0E14] border border-[#374151] text-xs text-[#9CA3AF] leading-relaxed animate-fade-in">
-                  {currentCard.q1Detail}
-                </div>
-              )}
+              ))}
             </div>
-
-            <div className="relative pt-2">
-               <input
-                type="range"
-                min="1"
-                max="10"
-                value={severity}
-                onChange={(e) => setSeverity(parseInt(e.target.value))}
-                className="w-full h-2 bg-[#0B0E14] rounded-none appearance-none cursor-pointer accent-[#E8830C] border border-[#374151] focus:outline-none"
-              />
-               <div className="flex justify-between mt-2 text-[10px] font-mono tracking-wider text-[#6B7280]">
-                <span>LOW EXPOSURE (1)</span>
-                <span>CRITICAL FAILURE (10)</span>
-              </div>
-            </div>
-             {/* Mobile only label */}
-             <div className={`sm:hidden mt-2 font-mono text-xs font-bold ${severityMeta.color} text-right`}>
-                {severityMeta.label}
-             </div>
           </div>
-
-          {/* Slider 2: Latency Proxy */}
-          <div className="group border-t border-[#374151] border-dashed pt-8 relative">
-            <div className="mb-4">
-              <div className="flex justify-between items-start mb-2">
-                <label className="text-sm font-bold text-[#E8830C] uppercase tracking-wide font-mono flex-1">
-                  Input 02: {currentCard.q2}
-                </label>
-                <div className="flex items-center gap-3">
-                  <span className={`font-mono text-xs font-bold ${latencyMeta.color} animate-pulse hidden sm:inline-block`}>
-                    {latencyMeta.label}
-                  </span>
-                  <span className="font-mono text-white text-xl font-bold bg-[#0B0E14] px-3 py-1 border border-[#374151]">
-                    {latency}
-                  </span>
-                </div>
-              </div>
-
-              {/* Question Paragraph + Pop-out Trigger */}
-              <div className="flex items-start gap-2">
-                <p className="text-sm text-white leading-relaxed font-semibold">
-                  {currentCard.q2Question}
-                </p>
-                <button 
-                  onClick={() => toggleDetail('q2')}
-                  className="text-[#9CA3AF] hover:text-[#E8830C] transition-colors focus:outline-none"
-                  aria-label="More details"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                  </svg>
-                </button>
-              </div>
-
-               {/* Pop-out Detail */}
-               {activeDetail === 'q2' && (
-                <div className="mt-3 p-3 bg-[#0B0E14] border border-[#374151] text-xs text-[#9CA3AF] leading-relaxed animate-fade-in">
-                  {currentCard.q2Detail}
-                </div>
-              )}
-            </div>
-
-            <div className="relative pt-2">
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={latency}
-                onChange={(e) => setLatency(parseInt(e.target.value))}
-                className="w-full h-2 bg-[#0B0E14] rounded-none appearance-none cursor-pointer accent-[#E8830C] border border-[#374151] focus:outline-none"
-              />
-               <div className="flex justify-between mt-2 text-[10px] font-mono tracking-wider text-[#6B7280]">
-                <span>AGILE RECOVERY (1)</span>
-                <span>FROZEN (10)</span>
-              </div>
-            </div>
-             {/* Mobile only label */}
-             <div className={`sm:hidden mt-2 font-mono text-xs font-bold ${latencyMeta.color} text-right`}>
-                {latencyMeta.label}
-             </div>
+          <div className="text-[#E8830C] font-mono text-xs">
+            {industry === 'Construction & Real Estate' ? 'IND: CONST' : 'IND: GENERIC'}
           </div>
         </div>
 
-        <div className="bg-[#0B0E14] p-6 border-t border-[#374151] flex justify-end">
-          <Button onClick={() => handleNext(false)} className="min-w-[200px]">
-            Confirm & Continue_
-          </Button>
+        {/* Interaction Zone */}
+        <div className="p-8 min-h-[300px]">
+          {/* Question 1 */}
+          <div className="mb-6">
+            <label className="block text-sm font-bold text-white mb-2">
+              <span className="text-[#E8830C] mr-2">Step 01:</span> 
+              {scenario.q1.label}
+            </label>
+            {scenario.q1.helperText && (
+              <p className="text-xs text-[#9CA3AF] mb-4">{scenario.q1.helperText}</p>
+            )}
+            {renderQ1Input()}
+          </div>
+
+          {/* Question 2 (Reactive) */}
+          {answer1 !== null && renderQ2Input()}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="p-4 bg-[#0B0E14] border-t border-[#374151] flex justify-end gap-4">
+           {/* Skip Button (assigns default high risk) */}
+           <button 
+             onClick={() => {
+                // Manual skip logic
+                const skipInput = { category: currentCategory, severity: 7, latency: 7, skipped: true };
+                setInputs([...inputs, skipInput]);
+                if (currentIndex < CATEGORIES.length - 1) setCurrentIndex(p => p + 1);
+                else onComplete([...inputs, skipInput]);
+             }}
+             className="text-xs font-mono text-[#6B7280] hover:text-white px-4"
+           >
+             SKIP_NODE
+           </button>
+
+           <Button 
+             onClick={handleNext} 
+             disabled={!canProceed}
+             className={!canProceed ? 'opacity-50 cursor-not-allowed' : ''}
+           >
+             CONFIRM INTEL &rarr;
+           </Button>
         </div>
       </div>
     </div>

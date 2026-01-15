@@ -1,258 +1,226 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from './Button';
-import { RiskInput, RiskCategory } from '../types';
-import { ProgressBar } from './ProgressBar';
-import { INDUSTRY_RbBS } from '../constants/scenarios'; 
+import { RiskCategory } from '../types';
 
-interface StageRiskAuditProps {
-  industry: string;
-  onComplete: (inputs: RiskInput[]) => void;
+export interface ScenarioQuestion {
+  id: string;
+  type: 'slider' | 'binary' | 'picker';
+  label: string;
+  options?: string[]; 
+  helperText?: string;
+  minLabel?: string; 
+  maxLabel?: string;
+  tooltip?: string; // NEW: Contextual help content
 }
 
-const CATEGORIES = [
-  RiskCategory.SUPPLY_CHAIN,
-  RiskCategory.CASH_FLOW,
-  RiskCategory.WORKFORCE,
-  RiskCategory.INFRASTRUCTURE_TOOLS,
-  RiskCategory.WEATHER_PHYSICAL
-];
+export interface IndustryScenario {
+  contextTags: string[]; 
+  q1: ScenarioQuestion;
+  q2: (answer1: any) => ScenarioQuestion | null;
+  calculateScore: (a1: any, a2: any) => { severity: number, latency: number };
+}
 
-export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComplete }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [inputs, setInputs] = useState<RiskInput[]>([]);
+const normalize = (val: number) => Math.ceil(val / 10);
+
+// === GENERIC FALLBACK ===
+const GENERIC_FALLBACK: Record<RiskCategory, IndustryScenario> = {
+    [RiskCategory.SUPPLY_CHAIN]: {
+      contextTags: ['Single Source', 'Logistics', 'Quality Fade'],
+      q1: { 
+        id: 'gen_supply', 
+        type: 'slider', 
+        label: 'Supplier Concentration', 
+        minLabel: 'Single Source', 
+        maxLabel: 'Distributed',
+        tooltip: 'Risk increases when a large % of revenue relies on a single vendor. "Safe" usually means no vendor controls >20% of your input.'
+      },
+      q2: () => ({ 
+        id: 'gen_rec', 
+        type: 'picker', 
+        label: 'Recovery Plan Status', 
+        options: ['Full Backup Active', 'Plan Exists (Untested)', 'No Plan'] 
+      }),
+      calculateScore: (v, a2) => ({ 
+        severity: normalize(100 - v), 
+        latency: a2 === 'Full Backup Active' ? 3 : (a2 === 'No Plan' ? 9 : 6)
+      })
+    },
+    // ... (Keep other generic risks as placeholders for now)
+    [RiskCategory.CASH_FLOW]: {
+       contextTags: ['Late Payments', 'Payroll'],
+       q1: { id: 'gen_cash', type: 'slider', label: 'Cash Runway', minLabel: '< 30 Days', maxLabel: '6+ Months' },
+       q2: () => null,
+       calculateScore: (v) => ({ severity: normalize(100 - v), latency: 5 })
+    },
+    [RiskCategory.WORKFORCE]: {
+        contextTags: ['Key Person', 'Burnout'],
+        q1: { id: 'gen_wf', type: 'slider', label: 'Key Person Dependency', minLabel: 'Redundant Teams', maxLabel: 'Single Points of Failure' },
+        q2: () => null,
+        calculateScore: (v) => ({ severity: normalize(v), latency: 5 })
+    },
+    [RiskCategory.INFRASTRUCTURE_TOOLS]: {
+        contextTags: ['SaaS Outage', 'Data Loss'],
+        q1: { id: 'gen_tool', type: 'slider', label: 'Platform Dependency', minLabel: 'Open Standard', maxLabel: 'Vendor Locked' },
+        q2: () => null,
+        calculateScore: (v) => ({ severity: normalize(v), latency: 5 })
+    },
+    [RiskCategory.WEATHER_PHYSICAL]: {
+       contextTags: ['Access', 'Power'],
+       q1: { id: 'gen_wea', type: 'slider', label: 'Physical Vulnerability', minLabel: 'Safe Zone', maxLabel: 'High Risk Zone' },
+       q2: () => null,
+       calculateScore: (v) => ({ severity: normalize(v), latency: 5 })
+    }
+};
+
+export const INDUSTRY_RbBS: Record<string, Record<RiskCategory, IndustryScenario>> = {
   
-  const [answer1, setAnswer1] = useState<any>(null);
-  const [answer2, setAnswer2] = useState<any>(null); // This will hold the final string (suggestion or custom)
-  const [isCustomInput, setIsCustomInput] = useState(false); // UI toggle
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-
-  const activeScenarioGroup = INDUSTRY_RbBS[industry] || INDUSTRY_RbBS['default'];
-  const currentCategory = CATEGORIES[currentIndex];
-  const scenario = activeScenarioGroup[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
-
-  useEffect(() => {
-    setAnswer1(null);
-    setAnswer2(null);
-    setIsCustomInput(false);
-    setSelectedTags([]);
-    
-    if (scenario.q1.type === 'slider') setAnswer1(50);
-  }, [currentIndex, industry]);
-
-  const handleNext = () => {
-    const { severity, latency } = scenario.calculateScore(answer1, answer2);
-    
-    // Determine the label for metadata
-    const q2Config = scenario.q2(answer1);
-    
-    const newInput: RiskInput = {
-      category: currentCategory,
-      severity: severity,
-      latency: latency, 
-      skipped: false,
-      metadata: {
-        question1_label: scenario.q1.label,
-        answer1_value: answer1,
-        question2_label: q2Config ? q2Config.label : 'N/A',
-        answer2_value: answer2,
-        selected_tags: selectedTags
+  // 1. CONSTRUCTION
+  'Construction & Real Estate': {
+    ...GENERIC_FALLBACK,
+    [RiskCategory.SUPPLY_CHAIN]: {
+      contextTags: ['Lumber Shortage', 'Steel Tariffs', 'Vendor Insolvency', 'Shipping Delays'],
+      q1: {
+        id: 'supply_resilience',
+        type: 'slider',
+        label: 'Material Lead Time Volatility',
+        helperText: 'Predictability of critical path delivery dates.',
+        minLabel: 'Unpredictable',
+        maxLabel: 'Guaranteed',
+        tooltip: 'In construction, "Volatility" is the enemy. Even if you have a supplier, if their delivery dates fluctuate by >20%, your project schedule (and margin) is at risk.'
+      },
+      q2: (a1) => ({
+        id: 'inventory_buffer',
+        type: 'picker',
+        label: 'On-Site Inventory Buffer',
+        options: ['< 3 Days (JIT)', '1-2 Weeks', 'Massive Stockpile (>1 Mo)'],
+        tooltip: 'Just-in-Time (JIT) is efficient for cash flow but fatal for continuity. A buffer allows you to keep working even if the supply chain breaks.'
+      }),
+      calculateScore: (resilience, buffer) => {
+        let risk = normalize(100 - resilience); 
+        if (buffer === '< 3 Days (JIT)') risk += 3;
+        if (buffer === 'Massive Stockpile (>1 Mo)') risk -= 2;
+        return { severity: Math.min(10, Math.max(1, risk)), latency: risk > 7 ? 8 : 4 };
       }
-    };
-
-    const newInputs = [...inputs, newInput];
-    setInputs(newInputs);
-
-    if (currentIndex < CATEGORIES.length - 1) {
-      setCurrentIndex(prev => prev + 1);
-    } else {
-      onComplete(newInputs);
     }
-  };
+  },
 
-  const renderQ1Input = () => {
-    const { q1 } = scenario;
-    if (q1.type === 'slider') {
-      return (
-        <div className="py-4">
-           <input
-            type="range"
-            min="0"
-            max="100"
-            value={answer1 || 50}
-            onChange={(e) => setAnswer1(parseInt(e.target.value))}
-            className="w-full h-2 bg-[#1F2937] rounded-lg appearance-none cursor-pointer accent-[#E8830C]"
-          />
-          <div className="flex justify-between mt-2 text-xs font-mono text-[#9CA3AF]">
-            <span>{q1.minLabel || 'Low Impact'}</span>
-            <span>{q1.maxLabel || 'Critical'}</span>
-          </div>
-        </div>
-      );
+  // 2. MANUFACTURING
+  'Manufacturing & Industrial': {
+    ...GENERIC_FALLBACK,
+    [RiskCategory.SUPPLY_CHAIN]: {
+      contextTags: ['Raw Materials', 'Shipping', 'Quality Control', 'Custom Tooling'],
+      q1: {
+        id: 'single_source_components',
+        type: 'slider',
+        label: 'Single-Source Components',
+        helperText: 'Percentage of BOM (Bill of Materials) that comes from exactly 1 factory.',
+        minLabel: 'Multi-Sourced',
+        maxLabel: 'Single-Sourced',
+        tooltip: 'If a specific part (e.g., a custom chipset or molded plastic) comes from only one factory in the world, your entire production line is fragile.'
+      },
+      q2: (a1) => ({
+        id: 'retooling_time',
+        type: 'picker',
+        label: 'Retooling / Switching Time',
+        options: ['Rapid (< 2 Weeks)', 'Moderate (1-3 Months)', 'Painful (6+ Months)'],
+        tooltip: 'If your primary vendor fails, how long does it take to validate a new mold, get a new sample approved, and ramp up production?'
+      }),
+      calculateScore: (dependency, time) => {
+        let lat = 6;
+        if (time === 'Rapid (< 2 Weeks)') lat = 3;
+        if (time === 'Painful (6+ Months)') lat = 10;
+        return { severity: normalize(dependency), latency: lat };
+      }
     }
-    if (q1.type === 'picker') {
-      return (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {q1.options?.map((opt: string) => (
-            <button
-              key={opt}
-              onClick={() => setAnswer1(opt)}
-              className={`p-4 text-sm font-mono border transition-all ${
-                answer1 === opt 
-                  ? 'bg-[#E8830C] border-[#E8830C] text-white' 
-                  : 'bg-[#0B0E14] border-[#374151] text-[#9CA3AF] hover:border-[#E8830C]'
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      );
+  },
+
+  // 3. SAAS / SOFTWARE
+  'SaaS / Software': {
+    ...GENERIC_FALLBACK,
+    [RiskCategory.SUPPLY_CHAIN]: {
+      contextTags: ['API Dependency', 'Vendor Insolvency', 'Price Hikes'],
+      q1: {
+        id: 'api_dependency',
+        type: 'slider',
+        label: 'Critical API Dependency',
+        helperText: 'Reliance on 3rd party APIs (e.g. OpenAI, Stripe, Twilio) for core function.',
+        minLabel: 'Independent',
+        maxLabel: 'Totally Dependent',
+        tooltip: 'Your "Supply Chain" is code. If a critical API (like an AI model or SMS gateway) goes down or triples its price, does your product stop working?'
+      },
+      q2: (a1) => ({
+        id: 'fallback_code',
+        type: 'picker',
+        label: 'API Fallback Capability',
+        options: ['Auto-Failover', 'Manual Switch', 'Hard-Coded / No Backup'],
+        tooltip: 'Can you switch providers (e.g. from Twilio to Plivo) instantly via a code switch, or would it require a full rewrite?'
+      }),
+      calculateScore: (dep, fallback) => {
+        let risk = normalize(dep);
+        let lat = fallback === 'Auto-Failover' ? 2 : (fallback === 'Hard-Coded / No Backup' ? 9 : 5);
+        return { severity: risk, latency: lat };
+      }
     }
-    return null;
-  };
+  },
 
-  const renderQ2Input = () => {
-    const q2 = scenario.q2(answer1);
-    if (!q2) return null;
-
-    return (
-      <div className="mt-8 animate-fade-in border-t border-[#374151] pt-6">
-        <label className="block text-sm font-bold text-white mb-4">
-          {q2.label}
-        </label>
-        
-        {/* Suggestion Chips */}
-        <div className="flex flex-wrap gap-3 mb-4">
-           {q2.options?.map((opt: string) => (
-             <button
-              key={opt}
-              onClick={() => {
-                setAnswer2(opt);
-                setIsCustomInput(false);
-              }}
-              className={`py-2 px-4 text-xs font-mono border rounded-full transition-all ${
-                answer2 === opt && !isCustomInput
-                  ? 'bg-[#E8830C] border-[#E8830C] text-white'
-                  : 'bg-[#1F2937] border-[#374151] text-[#9CA3AF] hover:border-white'
-              }`}
-             >
-               {opt}
-             </button>
-           ))}
-           
-           <button
-             onClick={() => {
-               setAnswer2(''); // Clear value to force typing
-               setIsCustomInput(true);
-             }}
-             className={`py-2 px-4 text-xs font-mono border rounded-full transition-all ${
-                isCustomInput
-                  ? 'bg-white border-white text-black'
-                  : 'bg-transparent border-[#374151] text-[#6B7280] hover:text-white'
-             }`}
-           >
-             Other / Custom...
-           </button>
-        </div>
-
-        {/* Custom Input Field (Mad Libs Style) */}
-        {isCustomInput && (
-          <div className="animate-fade-in">
-            <input 
-              type="text"
-              autoFocus
-              placeholder="Describe your specific situation..."
-              value={answer2} // This allows editing the "Other" value
-              onChange={(e) => setAnswer2(e.target.value)}
-              className="w-full bg-[#0B0E14] border-b-2 border-[#E8830C] text-white p-3 focus:outline-none font-mono text-sm"
-            />
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const toggleTag = (tag: string) => {
-    if (selectedTags.includes(tag)) {
-      setSelectedTags(prev => prev.filter(t => t !== tag));
-    } else {
-      setSelectedTags(prev => [...prev, tag]);
+  // 4. HEALTHCARE
+  'Healthcare / MedTech': {
+    ...GENERIC_FALLBACK,
+    [RiskCategory.SUPPLY_CHAIN]: {
+      contextTags: ['PPE Shortage', 'Device Components', 'Pharma Logistics'],
+      q1: { 
+        id: 'single_source', 
+        type: 'slider', 
+        label: 'Consumable Dependency', 
+        helperText: 'Reliance on specific, single-source medical supplies.',
+        minLabel: 'Generics Available',
+        maxLabel: 'Proprietary / Single',
+        tooltip: 'In healthcare, "Single Source" can be a compliance risk. If a specific catheter or reagent is unavailable, can you legally use a substitute?'
+      },
+      q2: () => ({
+        id: 'emergency_stock',
+        type: 'picker',
+        label: 'Emergency Stockpile Status',
+        options: ['> 1 Month On-Hand', '1-2 Weeks', 'Just-in-Time'],
+        tooltip: 'Standard practice for resilience in MedTech is often higher than retail. JIT is considered high risk for critical care items.'
+      }),
+      calculateScore: (val, stock) => {
+        let lat = stock === '> 1 Month On-Hand' ? 3 : 8;
+        return { severity: normalize(val), latency: lat };
+      }
     }
-  };
+  },
 
-  const q2Config = scenario.q2(answer1);
-  const isQ1Answered = answer1 !== null;
-  // Valid if Q2 doesn't exist OR if answer2 has content (string length > 0)
-  const isQ2Answered = !q2Config || (answer2 !== null && answer2 !== ''); 
-  const canProceed = isQ1Answered && isQ2Answered;
+  // 5. RETAIL
+  'Retail / E-commerce': {
+    ...GENERIC_FALLBACK,
+    [RiskCategory.SUPPLY_CHAIN]: {
+      contextTags: ['Inventory', 'Shipping Costs', 'Seasonality', 'Port Strikes'],
+      q1: {
+        id: 'inventory_depth',
+        type: 'slider',
+        label: 'Inventory Turnover Risk',
+        minLabel: 'Optimized',
+        maxLabel: 'Volatile',
+        tooltip: 'High volatility means you are prone to stockouts (lost revenue) or overstocking (cash flow death). Ideally, you want a stable, predictable flow.'
+      },
+      q2: () => ({ 
+        id: '3pl_backup', 
+        type: 'picker', 
+        label: 'Logistics / 3PL Redundancy',
+        options: ['Multiple Active Carriers', 'Single Partner + Backup', 'Single Point of Failure'],
+        tooltip: 'If your main shipper raises rates or faces a strike, do you have an active account with a competitor ready to go?'
+      }),
+      calculateScore: (vol, backup) => ({ 
+        severity: normalize(vol), 
+        latency: backup === 'Single Point of Failure' ? 9 : 4 
+      })
+    }
+  },
 
-  return (
-    <div className="max-w-3xl mx-auto pt-8 pb-20">
-      <ProgressBar current={currentIndex + 1} total={CATEGORIES.length} />
-
-      <div className="bg-[#161B22] border border-[#374151] p-1 shadow-2xl">
-        <div className="bg-[#0B0E14] p-6 border-b border-[#374151] flex justify-between items-start">
-          <div>
-            <h2 className="text-xl font-bold text-white uppercase tracking-tight">
-              {currentCategory}
-            </h2>
-            <div className="flex flex-wrap gap-2 mt-3">
-              {scenario.contextTags.map((tag: string) => (
-                <button
-                  key={tag}
-                  onClick={() => toggleTag(tag)}
-                  className={`text-[10px] font-mono uppercase px-2 py-1 border transition-colors ${
-                    selectedTags.includes(tag)
-                      ? 'bg-[#E8830C]/20 border-[#E8830C] text-[#E8830C]'
-                      : 'border-[#374151] text-[#6B7280] hover:border-[#9CA3AF]'
-                  }`}
-                >
-                  {selectedTags.includes(tag) ? '[x] ' : '[ ] '} {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="text-[#E8830C] font-mono text-xs">
-            {industry === 'Construction & Real Estate' ? 'IND: CONST' : 'IND: GENERIC'}
-          </div>
-        </div>
-
-        <div className="p-8 min-h-[300px]">
-          <div className="mb-6">
-            <label className="block text-sm font-bold text-white mb-2">
-              {scenario.q1.label}
-            </label>
-            {scenario.q1.helperText && (
-              <p className="text-xs text-[#9CA3AF] mb-4">{scenario.q1.helperText}</p>
-            )}
-            {renderQ1Input()}
-          </div>
-
-          {answer1 !== null && renderQ2Input()}
-        </div>
-
-        <div className="p-4 bg-[#0B0E14] border-t border-[#374151] flex justify-end gap-4">
-           <button 
-             onClick={() => {
-                const skipInput = { category: currentCategory, severity: 7, latency: 7, skipped: true };
-                setInputs([...inputs, skipInput]);
-                if (currentIndex < CATEGORIES.length - 1) setCurrentIndex(p => p + 1);
-                else onComplete([...inputs, skipInput]);
-             }}
-             className="text-xs font-mono text-[#6B7280] hover:text-white px-4"
-           >
-             SKIP
-           </button>
-
-           <Button 
-             onClick={handleNext} 
-             disabled={!canProceed}
-             className={!canProceed ? 'opacity-50 cursor-not-allowed' : ''}
-           >
-             NEXT &rarr;
-           </Button>
-        </div>
-      </div>
-    </div>
-  );
+  // Default mappings for other industries
+  'Professional Services': GENERIC_FALLBACK,
+  'Financial Services / Fintech': GENERIC_FALLBACK,
+  'Logistics & Transportation': GENERIC_FALLBACK, // Could customize later
+  'Energy & Utilities': GENERIC_FALLBACK,
+  'Other': GENERIC_FALLBACK,
+  'default': GENERIC_FALLBACK
 };

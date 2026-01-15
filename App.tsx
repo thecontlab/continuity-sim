@@ -84,7 +84,10 @@ function App() {
           )}
 
           {state.stage === AuditStage.RISK_AUDIT && (
-            <StageRiskAudit onComplete={handleAuditComplete} />
+            <StageRiskAudit 
+              industry={state.foundation.industry}
+              onComplete={handleAuditComplete} 
+              />
           )}
 
           {state.stage === AuditStage.PROCESSING && (

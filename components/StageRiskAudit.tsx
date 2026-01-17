@@ -40,7 +40,9 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     setSelectedTags([]);
     setActiveTooltip(null); 
     
-    if (scenario.q1.type === 'slider') setAnswer1(50);
+    // Default to middle value (50) for the new selector if needed, 
+    // but starting null forces a conscious choice which is often better data.
+    // We'll leave it null to require a click.
   }, [currentIndex, industry]);
 
   const handleNext = () => {
@@ -89,24 +91,49 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
   const renderQ1Input = () => {
     const { q1 } = scenario;
+    
     if (q1.type === 'slider') {
+      // REPLACED SLIDER WITH 5-SEGMENT SELECTOR
+      const segments = [10, 30, 50, 70, 90];
+      
       return (
-        <div className="py-4">
-           <input
-            type="range"
-            min="0"
-            max="100"
-            value={answer1 || 50}
-            onChange={(e) => setAnswer1(parseInt(e.target.value))}
-            className="w-full h-2 bg-[#1F2937] rounded-lg appearance-none cursor-pointer accent-[#E8830C]"
-          />
-          <div className="flex justify-between mt-2 text-xs font-mono text-[#9CA3AF]">
-            <span>{q1.minLabel || 'Low Impact'}</span>
-            <span>{q1.maxLabel || 'Critical'}</span>
+        <div className="py-2">
+          {/* Labels Row */}
+          <div className="flex justify-between text-[10px] font-mono uppercase text-[#9CA3AF] mb-3 tracking-wider">
+            <span>{q1.minLabel || 'Low'}</span>
+            <span>{q1.maxLabel || 'High'}</span>
+          </div>
+
+          {/* Segmented Buttons */}
+          <div className="grid grid-cols-5 gap-2 h-14">
+            {segments.map((val, idx) => {
+              const isSelected = answer1 === val;
+              return (
+                <button
+                  key={val}
+                  onClick={() => setAnswer1(val)}
+                  className={`
+                    relative group border transition-all duration-200 
+                    flex flex-col items-center justify-center
+                    ${isSelected 
+                      ? 'bg-[#E8830C] border-[#E8830C] text-white shadow-[0_0_15px_rgba(232,131,12,0.4)]' 
+                      : 'bg-[#0B0E14] border-[#374151] text-[#6B7280] hover:border-[#9CA3AF] hover:bg-[#1F2937]'
+                    }
+                  `}
+                >
+                  {/* Visual Indicator Bar inside button */}
+                  <div className={`w-1 h-1 rounded-full mb-1 transition-colors ${isSelected ? 'bg-white' : 'bg-[#374151] group-hover:bg-[#9CA3AF]'}`} />
+                  
+                  {/* Optional: Number or simple visual bar */}
+                  <span className="text-[10px] font-mono opacity-80">{idx + 1}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       );
     }
+
     if (q1.type === 'picker') {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -160,7 +187,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
               }}
               className={`py-2 px-4 text-xs font-mono border rounded-full transition-all ${
                 answer2 === opt && !isCustomInput
-                  ? 'bg-[#E8830C] border-[#E8830C] text-white'
+                  ? 'bg-[#E8830C] border-[#E8830C] text-white' 
                   : 'bg-[#1F2937] border-[#374151] text-[#9CA3AF] hover:border-white'
               }`}
              >
@@ -214,6 +241,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
   return (
     <div className="max-w-3xl mx-auto pt-8 pb-20">
+      
       <ProgressBar current={currentIndex + 1} total={CATEGORIES.length} />
 
       <div className="bg-[#161B22] border border-[#374151] p-1 shadow-2xl">

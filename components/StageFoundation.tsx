@@ -11,7 +11,6 @@ interface StageFoundationProps {
 // Custom Icon Components
 const Icons = {
   Construction: (
-    // Building Under Construction with Crane
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
       width="32" 
@@ -24,25 +23,19 @@ const Icons = {
       strokeLinejoin="round" 
       className="mb-2 text-current"
     >
-      {/* Building Structure */}
       <path d="M4 22V6a2 2 0 0 1 2-2h5" />
       <path d="M14 22V14h-3v8" />
       <path d="M8 10h.01" />
       <path d="M8 14h.01" />
       <path d="M8 18h.01" />
-      {/* Crane Mast */}
       <path d="M17 22V2" />
-      {/* Crane Jib */}
       <path d="M11 2h8" />
-      {/* Counterweight */}
       <path d="M19 2l3 3-3 3" /> 
-      {/* Hook Line */}
       <path d="M13 2v4" />
       <path d="M13 6l-1 1" />
     </svg>
   ),
   SkilledTrades: (
-    // Vertical Pipe with Lightning Bolt overlay
     <svg 
       xmlns="http://www.w3.org/2000/svg" 
       width="32" 
@@ -55,15 +48,12 @@ const Icons = {
       strokeLinejoin="round" 
       className="mb-2 text-current"
     >
-      {/* Vertical Pipe */}
       <path d="M8 3v18" />
       <path d="M16 3v18" />
       <path d="M6 3h12" />
       <path d="M6 21h12" />
       <path d="M6 7h12" opacity="0.3" />
       <path d="M6 17h12" opacity="0.3" />
-      
-      {/* Lightning Bolt Overlay - Filled to obscure lines behind it */}
       <path 
         d="M14 9l-2 4h3l-4 6v-5h-3l4-5" 
         fill="#0B0E14" 
@@ -73,17 +63,13 @@ const Icons = {
     </svg>
   ),
   Healthcare: (
-    // Nurse Hat with Center Cross
     <svg className="w-8 h-8 mb-2 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      {/* Cap Shape */}
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14l-1.5-4H6.5L5 8z" />
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8h18v9a1 1 0 01-1 1H4a1 1 0 01-1-1V8z" />
-      {/* Centered Cross - Adjusted for visual center of the bottom box */}
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9.5v5m-2.5-2.5h5" />
     </svg>
   ),
   ProfessionalServices: (
-    // Briefcase Icon (Unchanged)
     <svg className="w-8 h-8 mb-2 text-current" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
     </svg>
@@ -102,6 +88,14 @@ const KEY_INDUSTRIES: IndustryItem[] = [
   { id: 'Skilled Trades', label: 'Skilled Trades', icon: Icons.SkilledTrades },
   { id: 'Healthcare / MedTech', label: 'Healthcare', icon: Icons.Healthcare },
   { id: 'Professional Services', label: 'Prof. Services', icon: Icons.ProfessionalServices },
+];
+
+const REVENUE_PRESETS = [
+  { label: '$1M', value: 1000000 },
+  { label: '$5M', value: 5000000 },
+  { label: '$10M', value: 10000000 },
+  { label: '$25M', value: 25000000 },
+  { label: '$50M+', value: 50000000 },
 ];
 
 export const StageFoundation: React.FC<StageFoundationProps> = ({ onComplete }) => {
@@ -160,12 +154,6 @@ export const StageFoundation: React.FC<StageFoundationProps> = ({ onComplete }) 
     }
 
     // 2. Standard Input logic via helper
-    updateRevenue(val);
-  };
-
-  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setError('');
-    const val = parseInt(e.target.value, 10);
     updateRevenue(val);
   };
 
@@ -244,7 +232,7 @@ export const StageFoundation: React.FC<StageFoundationProps> = ({ onComplete }) 
           </div>
         </div>
 
-        {/* Revenue Section */}
+        {/* Revenue Section - Replaced Slider with Quick Select Grid */}
         <div>
           <label className="block text-xs font-mono text-[#9CA3AF] uppercase mb-4">
             Est. Annual Revenue (USD)
@@ -260,26 +248,26 @@ export const StageFoundation: React.FC<StageFoundationProps> = ({ onComplete }) 
                 placeholder="$0"
               />
               <div className="text-center text-[10px] text-[#6B7280] mt-2 font-mono uppercase tracking-wider">
-                Type directly (e.g. '15m') or use slider below
+                Type directly (e.g. '15m') or select a tier below
               </div>
             </div>
 
-            <div className="space-y-4">
-              <input 
-                type="range"
-                min="0"
-                max="50000000"
-                step="250000"
-                value={rawRevenue > 50000000 ? 50000000 : rawRevenue}
-                onChange={handleSliderChange}
-                className="w-full h-2 bg-[#1F2937] rounded-none appearance-none cursor-pointer accent-[#E8830C] hover:accent-[#FF9933] transition-colors"
-              />
-              <div className="flex justify-between text-[10px] text-[#6B7280] font-mono">
-                <span>$0</span>
-                <span>$10M</span>
-                <span>$25M</span>
-                <span>$50M+</span>
-              </div>
+            {/* Quick Select Buttons */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {REVENUE_PRESETS.map((preset) => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => updateRevenue(preset.value)}
+                  className={`py-3 px-2 text-xs font-mono border transition-all duration-200 hover:border-[#9CA3AF] ${
+                    rawRevenue === preset.value
+                      ? 'bg-[#E8830C] border-[#E8830C] text-white'
+                      : 'bg-[#1F2937] border-[#374151] text-[#9CA3AF] hover:text-white'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>

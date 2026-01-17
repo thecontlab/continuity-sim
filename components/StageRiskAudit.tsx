@@ -38,7 +38,8 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     setIsCustomInput(false);
     setActiveTooltip(null); 
     
-    // Default to null to force a user selection
+    // Default to 50 for slider if applicable, otherwise null
+    if (scenario.q1.type === 'slider') setAnswer1(50);
   }, [currentIndex, industry]);
 
   const handleNext = () => {
@@ -55,7 +56,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
         answer1_value: answer1,
         question2_label: q2Config ? q2Config.label : 'N/A',
         answer2_value: answer2,
-        selected_tags: [] // Tags removed from UI
+        selected_tags: [] 
       }
     };
 
@@ -87,43 +88,29 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
   const renderQ1Input = () => {
     const { q1 } = scenario;
-    
     if (q1.type === 'slider') {
-      const segments = [10, 30, 50, 70, 90];
-      
       return (
-        <div className="py-2">
-          <div className="flex justify-between text-[10px] font-mono uppercase text-[#9CA3AF] mb-3 tracking-wider">
-            <span>{q1.minLabel || 'Low'}</span>
-            <span>{q1.maxLabel || 'High'}</span>
-          </div>
+        <div className="py-4">
+           {/* Visual Value Indicator */}
+           <div className="flex justify-between items-end mb-2">
+              <span className="text-[10px] font-mono text-[#9CA3AF] uppercase">{q1.minLabel || 'Low Impact'}</span>
+              <span className="text-xl font-bold text-[#E8830C] font-mono">{answer1}%</span>
+              <span className="text-[10px] font-mono text-[#9CA3AF] uppercase text-right">{q1.maxLabel || 'Critical'}</span>
+           </div>
 
-          <div className="grid grid-cols-5 gap-2 h-14">
-            {segments.map((val, idx) => {
-              const isSelected = answer1 === val;
-              return (
-                <button
-                  key={val}
-                  onClick={() => setAnswer1(val)}
-                  className={`
-                    relative group border transition-all duration-200 
-                    flex flex-col items-center justify-center
-                    ${isSelected 
-                      ? 'bg-[#E8830C] border-[#E8830C] text-white shadow-[0_0_15px_rgba(232,131,12,0.4)]' 
-                      : 'bg-[#0B0E14] border-[#374151] text-[#6B7280] hover:border-[#9CA3AF] hover:bg-[#1F2937]'
-                    }
-                  `}
-                >
-                  <div className={`w-1 h-1 rounded-full mb-1 transition-colors ${isSelected ? 'bg-white' : 'bg-[#374151] group-hover:bg-[#9CA3AF]'}`} />
-                  <span className="text-[10px] font-mono opacity-80">{idx + 1}</span>
-                </button>
-              );
-            })}
-          </div>
+           {/* RESTORED SLIDER */}
+           <input
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={answer1 || 50}
+            onChange={(e) => setAnswer1(parseInt(e.target.value))}
+            className="w-full h-3 bg-[#1F2937] rounded-lg appearance-none cursor-pointer accent-[#E8830C] focus:outline-none focus:ring-2 focus:ring-[#E8830C]/50"
+          />
         </div>
       );
     }
-
     if (q1.type === 'picker') {
       return (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -159,6 +146,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
           <TooltipButton text={q2.tooltip} />
         </div>
 
+        {/* INLINE TOOLTIP FOR Q2 */}
         {activeTooltip === q2.tooltip && q2.tooltip && (
            <div className="mb-4 p-3 bg-[#161B22] border-l-2 border-[#E8830C] text-xs text-[#9CA3AF] italic animate-fade-in">
             <span className="font-bold text-[#E8830C] not-italic mr-2">HELP:</span>
@@ -176,7 +164,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
               }}
               className={`py-2 px-4 text-xs font-mono border rounded-full transition-all ${
                 answer2 === opt && !isCustomInput
-                  ? 'bg-[#E8830C] border-[#E8830C] text-white'
+                  ? 'bg-[#E8830C] border-[#E8830C] text-white' 
                   : 'bg-[#1F2937] border-[#374151] text-[#9CA3AF] hover:border-white'
               }`}
              >
@@ -231,7 +219,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
             <h2 className="text-xl font-bold text-white uppercase tracking-tight">
               {currentCategory}
             </h2>
-            {/* TAGS REMOVED FROM HERE */}
           </div>
           <div className="text-[#E8830C] font-mono text-xs">
             IND: {industry.length > 15 ? industry.substring(0, 12).toUpperCase() + '...' : industry.toUpperCase()}
@@ -247,6 +234,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
               <TooltipButton text={scenario.q1.tooltip} />
             </div>
 
+            {/* INLINE TOOLTIP FOR Q1 */}
             {activeTooltip === scenario.q1.tooltip && scenario.q1.tooltip && (
                <div className="mb-4 p-3 bg-[#161B22] border-l-2 border-[#E8830C] text-xs text-[#9CA3AF] italic animate-fade-in">
                 <span className="font-bold text-[#E8830C] not-italic mr-2">HELP:</span>

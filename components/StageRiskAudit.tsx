@@ -29,14 +29,9 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
   // Tooltip State
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
-  // --- DIAGNOSTIC LOGIC ---
   const activeScenarioGroup = INDUSTRY_RbBS[industry] || INDUSTRY_RbBS['default'];
   const currentCategory = CATEGORIES[currentIndex];
-  // Safe access to the scenario
-  const scenario = activeScenarioGroup?.[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
-
-  // Debugging Check
-  const isGeneric = activeScenarioGroup === INDUSTRY_RbBS['default'] && industry !== 'default';
+  const scenario = activeScenarioGroup[currentCategory] || INDUSTRY_RbBS['default'][currentCategory];
 
   useEffect(() => {
     setAnswer1(null);
@@ -45,7 +40,7 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     setSelectedTags([]);
     setActiveTooltip(null); 
     
-    if (scenario?.q1?.type === 'slider') setAnswer1(50);
+    if (scenario.q1.type === 'slider') setAnswer1(50);
   }, [currentIndex, industry]);
 
   const handleNext = () => {
@@ -81,20 +76,14 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
     return (
       <button
         onClick={() => setActiveTooltip(activeTooltip === text ? null : text)}
-        className="ml-2 w-5 h-5 rounded-full border border-[#9CA3AF] text-[#9CA3AF] text-xs font-mono hover:border-[#E8830C] hover:text-[#E8830C] transition-colors inline-flex items-center justify-center"
+        className={`ml-2 w-5 h-5 rounded-full border text-xs font-mono transition-colors inline-flex items-center justify-center ${
+          activeTooltip === text 
+            ? 'border-[#E8830C] text-[#E8830C] bg-[#E8830C]/10' 
+            : 'border-[#9CA3AF] text-[#9CA3AF] hover:border-[#E8830C] hover:text-[#E8830C]'
+        }`}
       >
         ?
       </button>
-    );
-  };
-
-  const TooltipDisplay = () => {
-    if (!activeTooltip) return null;
-    return (
-      <div className="mb-4 p-3 bg-[#161B22] border-l-2 border-[#E8830C] text-xs text-[#9CA3AF] italic animate-fade-in">
-        <span className="font-bold text-[#E8830C] not-italic mr-2">CONTEXT:</span>
-        {activeTooltip}
-      </div>
     );
   };
 
@@ -146,12 +135,20 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
     return (
       <div className="mt-8 animate-fade-in border-t border-[#374151] pt-6">
-        <div className="flex items-center mb-4">
+        <div className="flex items-center mb-2">
           <label className="block text-sm font-bold text-white">
             {q2.label}
           </label>
           <TooltipButton text={q2.tooltip} />
         </div>
+
+        {/* INLINE TOOLTIP FOR Q2 */}
+        {activeTooltip === q2.tooltip && q2.tooltip && (
+           <div className="mb-4 p-3 bg-[#161B22] border-l-2 border-[#E8830C] text-xs text-[#9CA3AF] italic animate-fade-in">
+            <span className="font-bold text-[#E8830C] not-italic mr-2">CONTEXT:</span>
+            {q2.tooltip}
+          </div>
+        )}
         
         <div className="flex flex-wrap gap-3 mb-4">
            {q2.options?.map((opt: string) => (
@@ -217,24 +214,6 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
 
   return (
     <div className="max-w-3xl mx-auto pt-8 pb-20">
-      
-      {/* --- DIAGNOSTIC BANNER START --- */}
-      <div className="bg-[#450A0A] border border-[#DC2626] p-2 mb-4 text-[10px] font-mono text-white flex justify-between items-center">
-        <div>
-          <span className="text-[#9CA3AF] mr-2">DETECTED INDUSTRY:</span>
-          <span className="font-bold">"{industry}"</span>
-        </div>
-        <div>
-          <span className="text-[#9CA3AF] mr-2">STATUS:</span>
-          {isGeneric ? (
-            <span className="text-red-400 font-bold">FALLBACK TO GENERIC (Mismatch)</span>
-          ) : (
-            <span className="text-green-400 font-bold">MATCHED CUSTOM SCENARIO</span>
-          )}
-        </div>
-      </div>
-      {/* --- DIAGNOSTIC BANNER END --- */}
-
       <ProgressBar current={currentIndex + 1} total={CATEGORIES.length} />
 
       <div className="bg-[#161B22] border border-[#374151] p-1 shadow-2xl">
@@ -260,13 +239,11 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
             </div>
           </div>
           <div className="text-[#E8830C] font-mono text-xs">
-            IND: {industry.substring(0, 10).toUpperCase()}
+            IND: {industry.length > 15 ? industry.substring(0, 12).toUpperCase() + '...' : industry.toUpperCase()}
           </div>
         </div>
 
         <div className="p-8 min-h-[300px]">
-          <TooltipDisplay />
-          
           <div className="mb-6">
             <div className="flex items-center mb-2">
               <label className="block text-sm font-bold text-white">
@@ -274,6 +251,15 @@ export const StageRiskAudit: React.FC<StageRiskAuditProps> = ({ industry, onComp
               </label>
               <TooltipButton text={scenario.q1.tooltip} />
             </div>
+
+            {/* INLINE TOOLTIP FOR Q1 */}
+            {activeTooltip === scenario.q1.tooltip && scenario.q1.tooltip && (
+               <div className="mb-4 p-3 bg-[#161B22] border-l-2 border-[#E8830C] text-xs text-[#9CA3AF] italic animate-fade-in">
+                <span className="font-bold text-[#E8830C] not-italic mr-2">CONTEXT:</span>
+                {scenario.q1.tooltip}
+              </div>
+            )}
+
             {scenario.q1.helperText && (
               <p className="text-xs text-[#9CA3AF] mb-4">{scenario.q1.helperText}</p>
             )}

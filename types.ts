@@ -78,4 +78,5 @@ export interface AppState {
   riskInputs: RiskInput[];
   identity: IdentityData;
   auditResult: GeminiAuditResponse | null;
+  leadId?: number; // <--- NEW: Stores the database ID of the current session
 }

@@ -1,36 +1,22 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppState, RiskCategory } from '../types';
 
-// Initialize Supabase Client
-// Ensure these environment variables are set in your deployment context
-const supabaseUrl = process.env.SUPABASE_URL || 'https://rcpjbuudyvndqvrcrbgy.supabase.co';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+// ARCHITECT NOTE: Updated to use Vite env variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Conditional initialization to prevent crash if keys are missing
 let supabase: SupabaseClient | null = null;
 
 if (supabaseUrl && supabaseAnonKey) {
-  try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-  } catch (err) {
-    console.warn("Supabase client initialization failed:", err);
-  }
+  supabase = createClient(supabaseUrl, supabaseAnonKey);
+} else {
+  console.warn("Supabase credentials missing. Data will not be saved.");
 }
 
 export const submitLead = async (state: AppState) => {
-  if (!state.identity.email || !state.identity.companyName) {
-    throw new Error("Missing identity information");
-  }
+  if (!supabase) return;
 
-  // Graceful fallback if Supabase is not configured
-  // This allows the app to function in demo/preview modes without crashing
-  if (!supabase) {
-    console.warn("Supabase credentials (SUPABASE_ANON_KEY) are missing. Skipping database save.");
-    // Return a mock success response so the UI flow continues
-    return [{ status: 'mock_success', message: 'Supabase keys missing' }];
-  }
-
-  // Helper to find scores for a specific category
+  // 1. Helper to extract flat scores for the dashboard columns
   const getScores = (category: RiskCategory) => {
     const input = state.riskInputs.find(i => i.category === category);
     return {
@@ -39,37 +25,43 @@ export const submitLead = async (state: AppState) => {
     };
   };
 
-  const supplyChain = getScores(RiskCategory.SUPPLY_CHAIN);
-  const cashFlow = getScores(RiskCategory.CASH_FLOW);
-  const weather = getScores(RiskCategory.WEATHER_PHYSICAL);
-  const infrastructure = getScores(RiskCategory.INFRASTRUCTURE_TOOLS);
-  const workforce = getScores(RiskCategory.WORKFORCE);
+  // 2. Prepare the Dynamic Risk Vectors (JSON)
+  // This maps the user's specific answers into the JSONB column
+  const riskVectorData = state.riskInputs.map(input => ({
+    category: input.category,
+    scores: { severity: input.severity, latency: input.latency },
+    metadata: input.metadata || {} // Captures Q1/Q2 labels and answers
+  }));
 
   const payload = {
+    // Identity
     company_name: state.identity.companyName,
     email: state.identity.email,
     industry: state.foundation.industry,
     revenue: state.foundation.revenue,
-    
-    // Derived Calculations (Safe access in case Gemini failed partway, though unlikely at this stage)
+
+    // High-Level Metrics
     primary_rar: state.auditResult?.audit_results.primary_rar || 0,
     volatility_index: state.auditResult?.audit_results.volatility_index || 0,
 
-    // Flattened Risk Scores
-    score_supply_chain_severity: supplyChain.severity,
-    score_supply_chain_latency: supplyChain.latency,
+    // The Dynamic Context
+    risk_vectors: riskVectorData,
 
-    score_cash_flow_severity: cashFlow.severity,
-    score_cash_flow_latency: cashFlow.latency,
+    // Flattened Scores (Map existing inputs to DB columns)
+    score_supply_chain_severity: getScores(RiskCategory.SUPPLY_CHAIN).severity,
+    score_supply_chain_latency: getScores(RiskCategory.SUPPLY_CHAIN).latency,
 
-    score_weather_severity: weather.severity,
-    score_weather_latency: weather.latency,
+    score_cash_flow_severity: getScores(RiskCategory.CASH_FLOW).severity,
+    score_cash_flow_latency: getScores(RiskCategory.CASH_FLOW).latency,
 
-    score_infrastructure_severity: infrastructure.severity,
-    score_infrastructure_latency: infrastructure.latency,
+    score_weather_severity: getScores(RiskCategory.WEATHER_PHYSICAL).severity,
+    score_weather_latency: getScores(RiskCategory.WEATHER_PHYSICAL).latency,
 
-    score_workforce_severity: workforce.severity,
-    score_workforce_latency: workforce.latency
+    score_infrastructure_severity: getScores(RiskCategory.INFRASTRUCTURE_TOOLS).severity,
+    score_infrastructure_latency: getScores(RiskCategory.INFRASTRUCTURE_TOOLS).latency,
+
+    score_workforce_severity: getScores(RiskCategory.WORKFORCE).severity,
+    score_workforce_latency: getScores(RiskCategory.WORKFORCE).latency
   };
 
   const { data, error } = await supabase

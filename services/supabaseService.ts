@@ -1,78 +1,111 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { AppState, RiskCategory } from '../types';
 
-// ARCHITECT NOTE: Updated to use Vite env variables
+// 1. Initialize Supabase
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 let supabase: SupabaseClient | null = null;
 
 if (supabaseUrl && supabaseAnonKey) {
-  supabase = createClient(supabaseUrl, supabaseAnonKey);
-} else {
-  console.warn("Supabase credentials missing. Data will not be saved.");
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+  } catch (err) {
+    console.warn("Supabase client init failed:", err);
+  }
 }
 
-export const submitLead = async (state: AppState) => {
-  if (!supabase) return;
-
-  // 1. Helper to extract flat scores for the dashboard columns
-  const getScores = (category: RiskCategory) => {
-    const input = state.riskInputs.find(i => i.category === category);
-    return {
-      severity: input ? input.severity : 0,
-      latency: input ? input.latency : 0
-    };
+// 2. Internal Helper for Score Extraction
+const getScores = (state: AppState, category: RiskCategory) => {
+  const input = state.riskInputs.find(i => i.category === category);
+  return {
+    severity: input ? input.severity : 0,
+    latency: input ? input.latency : 0
   };
+};
 
-  // 2. Prepare the Dynamic Risk Vectors (JSON)
-  // This maps the user's specific answers into the JSONB column
-  const riskVectorData = state.riskInputs.map(input => ({
+// --- EXPORT 1: DRAFT LEAD (Partial Save) ---
+// This runs silently while the AI report is generating.
+export const draftLead = async (state: AppState) => {
+  if (!supabase) {
+    console.warn("Supabase offline. Skipping draft save.");
+    return null;
+  }
+
+  console.log("Initiating Draft Save...");
+
+  // Map dynamic JSON structure
+  const riskVectors = state.riskInputs.map(input => ({
     category: input.category,
-    scores: { severity: input.severity, latency: input.latency },
-    metadata: input.metadata || {} // Captures Q1/Q2 labels and answers
+    scores: { 
+      severity: input.severity, 
+      latency: input.latency,
+      magnitude: input.severity + input.latency 
+    },
+    telemetry: {
+      q1_label: input.metadata?.question1_label,
+      q1_value: input.metadata?.answer1_value,
+      q2_label: input.metadata?.question2_label,
+      q2_value: input.metadata?.answer2_value,
+      skipped: input.skipped
+    }
   }));
 
+  // Construct Payload (Identity fields are NULL here)
   const payload = {
-    // Identity
-    company_name: state.identity.companyName,
-    email: state.identity.email,
     industry: state.foundation.industry,
     revenue: state.foundation.revenue,
-
-    // High-Level Metrics
     primary_rar: state.auditResult?.audit_results.primary_rar || 0,
     volatility_index: state.auditResult?.audit_results.volatility_index || 0,
+    risk_vectors: riskVectors,
 
-    // The Dynamic Context
-    risk_vectors: riskVectorData,
-
-    // Flattened Scores (Map existing inputs to DB columns)
-    score_supply_chain_severity: getScores(RiskCategory.SUPPLY_CHAIN).severity,
-    score_supply_chain_latency: getScores(RiskCategory.SUPPLY_CHAIN).latency,
-
-    score_cash_flow_severity: getScores(RiskCategory.CASH_FLOW).severity,
-    score_cash_flow_latency: getScores(RiskCategory.CASH_FLOW).latency,
-
-    score_weather_severity: getScores(RiskCategory.WEATHER_PHYSICAL).severity,
-    score_weather_latency: getScores(RiskCategory.WEATHER_PHYSICAL).latency,
-
-    score_infrastructure_severity: getScores(RiskCategory.INFRASTRUCTURE_TOOLS).severity,
-    score_infrastructure_latency: getScores(RiskCategory.INFRASTRUCTURE_TOOLS).latency,
-
-    score_workforce_severity: getScores(RiskCategory.WORKFORCE).severity,
-    score_workforce_latency: getScores(RiskCategory.WORKFORCE).latency
+    // Flattened Scores
+    score_supply_chain_severity: getScores(state, RiskCategory.SUPPLY_CHAIN).severity,
+    score_supply_chain_latency: getScores(state, RiskCategory.SUPPLY_CHAIN).latency,
+    score_cash_flow_severity: getScores(state, RiskCategory.CASH_FLOW).severity,
+    score_cash_flow_latency: getScores(state, RiskCategory.CASH_FLOW).latency,
+    score_weather_severity: getScores(state, RiskCategory.WEATHER_PHYSICAL).severity,
+    score_weather_latency: getScores(state, RiskCategory.WEATHER_PHYSICAL).latency,
+    score_infrastructure_severity: getScores(state, RiskCategory.INFRASTRUCTURE_TOOLS).severity,
+    score_infrastructure_latency: getScores(state, RiskCategory.INFRASTRUCTURE_TOOLS).latency,
+    score_workforce_severity: getScores(state, RiskCategory.WORKFORCE).severity,
+    score_workforce_latency: getScores(state, RiskCategory.WORKFORCE).latency
   };
 
+  // Insert and return only the ID
   const { data, error } = await supabase
     .from('leads')
     .insert([payload])
-    .select();
+    .select('id')
+    .single();
 
   if (error) {
-    console.error('Supabase Submission Error:', error);
-    throw error;
+    console.error("Draft Save Failed:", error);
+    return null;
   }
 
-  return data;
+  return data.id; // Returns the ID (e.g., 42) to App.tsx
+};
+
+// --- EXPORT 2: FINALIZE LEAD (Identity Unlock) ---
+// This runs when they click the button on the Teaser page.
+export const finalizeLead = async (leadId: number, identity: { companyName: string, email: string }) => {
+  if (!supabase) return;
+
+  console.log(`Finalizing Lead ID: ${leadId}`);
+
+  const { error } = await supabase
+    .from('leads')
+    .update({
+      company_name: identity.companyName,
+      email: identity.email
+    })
+    .eq('id', leadId); // Updates the specific row we created earlier
+
+  if (error) {
+    console.error("Finalization Failed:", error);
+    throw error;
+  }
+  
+  console.log("Lead Identity Secured.");
 };

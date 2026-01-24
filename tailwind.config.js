@@ -2,7 +2,16 @@
 export default {
   content: [
     "./index.html",
-    "./**/*.{js,ts,jsx,tsx}",
+    // 1. Explicitly list the root files you use
+    "./App.tsx",
+    "./index.tsx",
+    
+    // 2. Explicitly list your specific code folders
+    "./components/**/*.{js,ts,jsx,tsx}",
+    "./services/**/*.{js,ts,jsx,tsx}",
+    "./constants/**/*.{js,ts,jsx,tsx}",
+    
+    // 3. Exclude everything else (like node_modules) by omission
   ],
   theme: {
     extend: {

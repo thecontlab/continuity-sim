@@ -1,60 +1,88 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { FoundationData, RiskInput, GeminiAuditResponse, RiskCategory } from "../types";
 
-const RESPONSE_SCHEMA = {
-  type: Type.OBJECT,
-  properties: {
-    audit_results: {
-      type: Type.OBJECT,
-      properties: {
-        primary_rar: { type: Type.NUMBER, description: "Revenue at Risk amount in USD" },
-        primary_risk_category: { type: Type.STRING },
-        volatility_index: { type: Type.NUMBER, description: "0-100 score" },
-        unknown_vulnerabilities: {
-          type: Type.ARRAY,
-          items: { type: Type.STRING }
-        }
-      },
-      required: ["primary_rar", "primary_risk_category", "volatility_index", "unknown_vulnerabilities"]
+// --- 1. THE UNIVERSAL NARRATIVE LIBRARY ---
+const NARRATIVES: Record<string, { A: any; B: any }> = {
+  [RiskCategory.SUPPLY_CHAIN]: {
+    A: {
+      headline: "CRITICAL UPSTREAM DEPENDENCY",
+      finding: "Your value chain has a single point of failure. A disruption at one key external provider creates a 'cascade failure,' halting your ability to deliver value within the calculated latency window."
     },
-    heatmap_coordinates: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          label: { type: Type.STRING },
-          x: { type: Type.NUMBER, description: "Severity 0-10" },
-          y: { type: Type.NUMBER, description: "Latency 0-10" },
-          status: { type: Type.STRING, description: "Verified or Unknown" }
-        },
-        required: ["label", "x", "y", "status"]
-      }
-    },
-    teaser_summary: {
-      type: Type.OBJECT,
-      properties: {
-        headline: { type: Type.STRING, description: "Short, punchy, alarming headline about the risk" },
-        critical_finding: { type: Type.STRING, description: "One sentence direct observation" }
-      },
-      required: ["headline", "critical_finding"]
-    },
-    priority_fix_list: {
-      type: Type.ARRAY,
-      items: {
-        type: Type.OBJECT,
-        properties: {
-          timeline: { type: Type.STRING },
-          task: { type: Type.STRING, description: "Specific strategic action" },
-          target: { type: Type.STRING }
-        },
-        required: ["timeline", "task", "target"]
-      }
+    B: {
+      headline: "VOLATILE INPUT STABILITY",
+      finding: "External inputs—whether physical goods, digital services, or talent—are exhibiting instability. Without a larger operational buffer, this volatility will force unforced revenue pauses."
     }
   },
-  required: ["audit_results", "heatmap_coordinates", "teaser_summary", "priority_fix_list"]
+  [RiskCategory.CASH_FLOW]: {
+    A: {
+      headline: "SOLVENCY RUNWAY COMPROMISED",
+      finding: "Operational reserves are insufficient to absorb a 30-day revenue shock. The divergence between your fixed obligations and revenue timing creates a mathematically inevitable liquidity gap."
+    },
+    B: {
+      headline: "CASH CONVERSION CYCLE IMBALANCE",
+      finding: "Your outflow velocity exceeds your inflow velocity. This structural misalignment drains working capital and reduces your capacity to weather market contractions."
+    }
+  },
+  [RiskCategory.WORKFORCE]: {
+    A: {
+      headline: "KEY PERSON DEPENDENCY",
+      finding: "Institutional knowledge is dangerously concentrated. The loss of specific individuals would result in an immediate capability regression, as critical execution processes are not transferable."
+    },
+    B: {
+      headline: "KNOWLEDGE SILO RISK",
+      finding: "Critical operations rely on tribal knowledge rather than documented systems. This prevents 'surging' capacity during high-demand periods and creates fragility during turnover."
+    }
+  },
+  [RiskCategory.INFRASTRUCTURE_TOOLS]: {
+    A: {
+      headline: "PLATFORM & DATA LOCK-IN",
+      finding: "Operational continuity is fully dependent on proprietary external systems. You lack an autonomous recovery protocol, meaning a vendor outage results in total operational paralysis."
+    },
+    B: {
+      headline: "FRAGMENTED OPERATIONAL TRUTH",
+      finding: "Critical data is siloed across disconnected tools or manual trackers. The lack of a unified 'single source of truth' creates dangerous blind spots during rapid decision-making."
+    }
+  },
+  [RiskCategory.WEATHER_PHYSICAL]: {
+    A: {
+      headline: "GEOGRAPHIC CONCENTRATION EXPOSURE",
+      finding: "Asset density in a high-risk zone exceeds safe diversification limits. A single localized event (natural or infrastructure) has the probability of disabling 100% of revenue generation."
+    },
+    B: {
+      headline: "ACCESS & RECOVERY FRAGILITY",
+      finding: "Your operations lack location independence. While assets may be insured, the inability to physically access or utilize them during a disruption creates an unrecoverable revenue loss."
+    }
+  }
 };
 
-// --- LOCAL CALCULATION LOGIC ---
+const PRIORITY_FIXES: Record<string, any[]> = {
+  [RiskCategory.SUPPLY_CHAIN]: [
+    { timeline: "30 Days", task: "Audit Tier-1 critical vendors for financial solvency", target: "Identification" },
+    { timeline: "60 Days", task: "Qualify one alternative provider for primary inputs", target: "Redundancy" },
+    { timeline: "90 Days", task: "Negotiate 'Force Majeure' clauses in vendor contracts", target: "Legal Shield" }
+  ],
+  [RiskCategory.CASH_FLOW]: [
+    { timeline: "30 Days", task: "Aggressively collect overdue Accounts Receivable", target: "Cash Injection" },
+    { timeline: "60 Days", task: "Establish a rolling 13-week cash flow forecast", target: "Visibility" },
+    { timeline: "90 Days", task: "Secure a standby Line of Credit (LOC) or bridge facility", target: "Safety Net" }
+  ],
+  [RiskCategory.WORKFORCE]: [
+    { timeline: "30 Days", task: "Identify 'Bus Factor' personnel for immediate triage", target: "Assessment" },
+    { timeline: "60 Days", task: "Document top 5 critical execution processes (SOPs)", target: "Knowledge Capture" },
+    { timeline: "90 Days", task: "Cross-train junior staff on one critical function", target: "Continuity" }
+  ],
+  [RiskCategory.INFRASTRUCTURE_TOOLS]: [
+    { timeline: "30 Days", task: "Test offline/manual operating procedures", target: "Resilience" },
+    { timeline: "60 Days", task: "Audit SaaS contracts for data ownership/export clauses", target: "Sovereignty" },
+    { timeline: "90 Days", task: "Implement a secondary communication channel (out-of-band)", target: "Redundancy" }
+  ],
+  [RiskCategory.WEATHER_PHYSICAL]: [
+    { timeline: "30 Days", task: "Review insurance policy for Business Interruption gaps", target: "Financial Shield" },
+    { timeline: "60 Days", task: "Digitize physical records to redundant cloud storage", target: "Asset Protection" },
+    { timeline: "90 Days", task: "Establish a remote-work protocol for HQ staff", target: "Agility" }
+  ]
+};
+
+// --- 2. LOCAL CALCULATION LOGIC ---
 const WEIGHTS: Record<string, number> = {
   [RiskCategory.SUPPLY_CHAIN]: 1.0,
   [RiskCategory.CASH_FLOW]: 1.0,
@@ -67,11 +95,13 @@ const WEIGHTS: Record<string, number> = {
 const calculateMechanics = (revenue: number, inputs: RiskInput[]) => {
   let highestRar = 0;
   let primaryCategory = '';
+  let primaryInput: RiskInput | null = null;
   let totalScore = 0;
+  const heatmapData = [];
 
-  const heatmapData = inputs.map(input => {
+  // ARCHITECT FIX: Use for-loop instead of .map() to satisfy TypeScript Control Flow
+  for (const input of inputs) {
     // 1. Calculate RAR for this specific node
-    // Formula: Revenue * ((Severity * Latency / 100) * Weight)
     const weight = WEIGHTS[input.category] || 0.5;
     const riskFactor = (input.severity * input.latency) / 100;
     const rar = Math.round(revenue * riskFactor * weight);
@@ -80,26 +110,28 @@ const calculateMechanics = (revenue: number, inputs: RiskInput[]) => {
     if (rar > highestRar) {
       highestRar = rar;
       primaryCategory = input.category;
+      primaryInput = input;
     }
 
-    // Track Aggregate Volatility (Simple average of magnitudes)
+    // Track Aggregate Volatility
     totalScore += (input.severity + input.latency);
 
-    return {
+    // Build Heatmap
+    heatmapData.push({
       label: input.category,
       x: input.severity,
       y: input.latency,
       status: input.skipped ? 'Unknown' : 'Verified'
-    };
-  });
+    });
+  }
 
   // Normalize Volatility Index (0-100)
-  // Max possible score per item is 20. 5 items = 100 max total.
   const volatilityIndex = Math.min(100, Math.round((totalScore / (inputs.length * 20)) * 100));
 
   return {
     primary_rar: highestRar,
     primary_risk_category: primaryCategory || 'General Volatility',
+    primary_input: primaryInput,
     volatility_index: volatilityIndex,
     heatmap_coordinates: heatmapData
   };
@@ -109,108 +141,55 @@ export const generateAuditReport = async (
   foundation: FoundationData,
   riskInputs: RiskInput[]
 ): Promise<GeminiAuditResponse> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-
-  // 1. PERFORM DETERMINISTIC MATH LOCAL (The "Sim" Part)
+  
+  // 1. PERFORM CALCULATION
   const mechanics = calculateMechanics(foundation.revenue, riskInputs);
+  const category = mechanics.primary_risk_category;
+  
+  // 2. DETERMINE NARRATIVE (Severity Logic)
+  // Check magnitude of the primary risk input (Severity + Latency, max 20)
+  // If > 12 (60%), it is Critical (A). Otherwise, Warning (B).
+  const primaryMag = mechanics.primary_input ? (mechanics.primary_input.severity + mechanics.primary_input.latency) : 0;
+  const severityKey = primaryMag > 12 ? 'A' : 'B';
+  
+  // Fallback to Cash Flow A if something goes wrong with the lookup
+  const baseNarrative = NARRATIVES[category]?.[severityKey as 'A' | 'B'] || NARRATIVES[RiskCategory.CASH_FLOW].A;
+  const fixes = PRIORITY_FIXES[category] || [];
 
-  // 2. PREPARE PROMPT (The "Advisor" Part)
-  const userPrompt = `
-    Analyze the following firm data:
-    Industry: ${foundation.industry}
-    Annual Revenue: $${foundation.revenue}
+  // 3. GENERATE DYNAMIC TIE-BACK (The "Why")
+  // Injects the specific inputs (e.g., "Single Source") into the general narrative
+  let tieBack = "";
+  if (mechanics.primary_input?.metadata) {
+    const meta = mechanics.primary_input.metadata;
     
-    Calculated Risk Data (USE THESE VALUES):
-    Primary Risk: ${mechanics.primary_risk_category}
-    Revenue at Risk: $${mechanics.primary_rar}
-    Volatility Index: ${mechanics.volatility_index}
-
-    Risk Inputs:
-    ${JSON.stringify(riskInputs, null, 2)}
-    
-    Generate the text summary and priority fix list. 
-    IMPORTANT: You must output the specific numeric values provided above for RAR and Risk Category. Do not recalculate them.
-  `;
-
-  // 3. GENERATE OR MOCK
-  let responseData: GeminiAuditResponse;
-
-  if (!apiKey || apiKey.length === 0) {
-    console.warn("API_KEY not found. Using Dynamic Mock Data.");
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Dynamic Mock that actually respects the sliders
-    responseData = {
-      audit_results: {
-        primary_rar: mechanics.primary_rar,
-        primary_risk_category: mechanics.primary_risk_category,
-        volatility_index: mechanics.volatility_index,
-        unknown_vulnerabilities: riskInputs.filter(i => i.skipped).map(i => `${i.category} Protocol Unverified`)
-      },
-      heatmap_coordinates: mechanics.heatmap_coordinates,
-      teaser_summary: {
-        headline: `CRITICAL FRAGILITY IN ${mechanics.primary_risk_category.toUpperCase()} VECTOR`,
-        critical_finding: `${mechanics.primary_risk_category} instability exposes ${Math.round((mechanics.primary_rar / foundation.revenue) * 100)}% of annual revenue to immediate disruption.`
-      },
-      priority_fix_list: [
-        { timeline: "30 Days", task: `Audit ${mechanics.primary_risk_category} single-points-of-failure`, target: "Severity Reduction" },
-        { timeline: "60 Days", task: "Implement cross-training for key technical roles", target: "Latency Reduction" },
-        { timeline: "90 Days", task: "Establish 3-month operating cash reserve", target: "Adaptive Capacity" }
-      ]
-    };
-
-  } else {
-    // Real API Call
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const systemPrompt = `
-        You are the Continuity Advisor. You are a senior strategy consultant.
-        Your tone is institutional, surgical, and purely objective.
-        Analyze the data provided and fill in the JSON schema.
-        Use the Pre-Calculated financial figures provided in the prompt.
-      `;
-
-      const result = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: RESPONSE_SCHEMA,
-          systemInstruction: systemPrompt
-        }
-      });
-
-      const text = result.text;
-      if (!text) throw new Error("No response from AI");
-      responseData = JSON.parse(text) as GeminiAuditResponse;
-
-    } catch (error) {
-      console.error("Audit Generation Failed", error);
-      // Fallback to dynamic mock if API fails
-      responseData = {
-        audit_results: {
-          primary_rar: mechanics.primary_rar,
-          primary_risk_category: mechanics.primary_risk_category,
-          volatility_index: mechanics.volatility_index,
-          unknown_vulnerabilities: ["AI Generation Failed - Using Fallback Data"]
-        },
-        heatmap_coordinates: mechanics.heatmap_coordinates,
-        teaser_summary: {
-          headline: "SYSTEM OFFLINE: LOCAL ANALYSIS ONLY",
-          critical_finding: "The AI analysis service is temporarily unavailable. Displaying raw calculation data."
-        },
-        priority_fix_list: []
-      };
+    // Only add if we have actual answers
+    if (meta.answer1_value) {
+       tieBack = ` This exposure is driven by your input for ${meta.question1_label} (${meta.answer1_value})`;
+       
+       if (meta.answer2_value) {
+         tieBack += ` combined with ${meta.question2_label} (${meta.answer2_value}).`;
+       } else {
+         tieBack += ".";
+       }
     }
   }
 
-  // 4. FINAL SAFETY OVERWRITE
-  // Regardless of what the AI said (or if we used Mock), we overwrite the math 
-  // with our local deterministic calculations to ensure the UI matches the sliders 100%.
-  responseData.audit_results.primary_rar = mechanics.primary_rar;
-  responseData.audit_results.primary_risk_category = mechanics.primary_risk_category;
-  responseData.audit_results.volatility_index = mechanics.volatility_index;
-  responseData.heatmap_coordinates = mechanics.heatmap_coordinates;
+  // 4. SIMULATE PROCESSING DELAY
+  await new Promise(resolve => setTimeout(resolve, 1500));
 
-  return responseData;
+  // 5. RETURN DETERMINISTIC RESPONSE
+  return {
+    audit_results: {
+      primary_rar: mechanics.primary_rar,
+      primary_risk_category: mechanics.primary_risk_category,
+      volatility_index: mechanics.volatility_index,
+      unknown_vulnerabilities: riskInputs.filter(i => i.skipped).map(i => `${i.category} Protocol Unverified`)
+    },
+    heatmap_coordinates: mechanics.heatmap_coordinates,
+    teaser_summary: {
+      headline: baseNarrative.headline,
+      critical_finding: baseNarrative.finding + tieBack
+    },
+    priority_fix_list: fixes
+  };
 };

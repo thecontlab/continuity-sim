@@ -1,6 +1,5 @@
 import React from 'react';
 import { GeminiAuditResponse, IdentityData } from '../types';
-import { Button } from './Button';
 import { HeatmapChart } from './HeatmapChart';
 
 interface StageReportProps {
@@ -53,14 +52,14 @@ export const StageReport: React.FC<StageReportProps> = ({ data, identity }) => {
           </div>
         </div>
 
-        {/* Right Col: Priority List */}
+        {/* Right Col: Priority List & Confirmation */}
         <div className="lg:col-span-1">
-          <div className="bg-[#161B22] border border-[#374151] h-full">
+          <div className="bg-[#161B22] border border-[#374151] h-full flex flex-col">
             <div className="p-4 border-b border-[#374151] bg-[#0B0E14]">
               <h3 className="text-sm font-bold text-white uppercase">90-Day Priority Fix</h3>
             </div>
             
-            <div className="divide-y divide-[#374151]">
+            <div className="divide-y divide-[#374151] flex-grow">
               {data.priority_fix_list.map((fix, idx) => (
                 <div key={idx} className="p-6">
                   <div className="flex justify-between items-center mb-2">
@@ -77,9 +76,31 @@ export const StageReport: React.FC<StageReportProps> = ({ data, identity }) => {
             </div>
 
             <div className="p-6 bg-[#0B0E14] border-t border-[#374151]">
-              <Button fullWidth variant="primary" onClick={() => window.print()}>
-                Download PDF Report
-              </Button>
+              {/* CONCIERGE CONFIRMATION CARD */}
+              <div className="bg-[#10B981]/10 border border-[#10B981]/30 rounded p-6 text-center animate-fade-in">
+                <div className="flex justify-center mb-3">
+                  <div className="w-10 h-10 rounded-full bg-[#10B981]/20 flex items-center justify-center">
+                     <svg className="w-6 h-6 text-[#10B981]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                     </svg>
+                  </div>
+                </div>
+                <h3 className="text-white font-bold text-base uppercase mb-2">Analysis Underway</h3>
+                <p className="text-[#9CA3AF] text-sm leading-relaxed mb-4">
+                  Your risk profile has been securely transmitted. Our expert team is now reviewing your data to generate your bespoke <strong>Continuity Roadmap</strong>.
+                </p>
+                <div className="bg-[#0B0E14]/50 rounded p-3 inline-block border border-[#374151] mb-2">
+                  <p className="text-[10px] text-[#6B7280] font-mono uppercase tracking-wide mb-1">
+                    Estimated Delivery
+                  </p>
+                  <p className="text-[#E8830C] font-mono text-sm font-bold">
+                    Within 24 Hours
+                  </p>
+                </div>
+                <p className="text-xs text-[#6B7280] mt-2">
+                  Check your inbox at <span className="text-white font-mono">{identity.email}</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>

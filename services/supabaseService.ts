@@ -56,7 +56,7 @@ export const draftLead = async (state: AppState) => {
     risk_vectors: riskVectors,
 
     // Flattened Scores for SQL Analytics
-    score_supply_chain_severity:HW: getScores(state.riskInputs, RiskCategory.SUPPLY_CHAIN).severity,
+    score_supply_chain_severity: getScores(state.riskInputs, RiskCategory.SUPPLY_CHAIN).severity,
     score_supply_chain_latency: getScores(state.riskInputs, RiskCategory.SUPPLY_CHAIN).latency,
     score_cash_flow_severity: getScores(state.riskInputs, RiskCategory.CASH_FLOW).severity,
     score_cash_flow_latency: getScores(state.riskInputs, RiskCategory.CASH_FLOW).latency,
